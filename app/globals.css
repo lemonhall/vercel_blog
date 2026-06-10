@@ -187,6 +187,26 @@ a {
   margin: 0 0 8px;
 }
 
+.post-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -2px 0 4px;
+  min-width: 0;
+}
+
+.post-tags a {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(73, 102, 79, 0.08);
+  color: var(--accent-strong);
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
 .post-excerpt {
   margin: 0;
   color: #3f454b;

@@ -40,6 +40,22 @@ export const fixturePosts: Post[] = [
     updated_at: "2022-05-24T10:00:00.000Z",
     published_at: null
   },
+  ...Array.from({ length: 11 }, (_, index) => {
+    const day = String(22 - index).padStart(2, "0");
+    return {
+      id: `fixture-recipe-extra-${index + 1}`,
+      legacy_id: 200 + index,
+      title: `测试食谱 ${index + 1}`,
+      slug: `recipe-${index + 1}`,
+      content_html: `<p>这是第${index + 1}篇食谱分页测试。</p>`,
+      excerpt: `这是第${index + 1}篇食谱分页测试。`,
+      status: "published" as const,
+      content_kind: "recipe" as const,
+      created_at: `2022-05-${day}T09:00:00.000Z`,
+      updated_at: `2022-05-${day}T09:00:00.000Z`,
+      published_at: `2022-05-${day}T09:00:00.000Z`
+    };
+  }),
   ...Array.from({ length: 12 }, (_, index) => {
     const day = String(index + 1).padStart(2, "0");
     return {
@@ -61,7 +77,8 @@ export const fixturePosts: Post[] = [
 export const fixturePostTags = [
   { postId: "fixture-2", name: "牛肉" },
   { postId: "fixture-2", name: "炖菜" },
-  { postId: "fixture-2", name: "家常菜" }
+  { postId: "fixture-2", name: "家常菜" },
+  ...Array.from({ length: 11 }, (_, index) => ({ postId: `fixture-recipe-extra-${index + 1}`, name: "家常菜" }))
 ];
 
 export function useFixtureData(): boolean {

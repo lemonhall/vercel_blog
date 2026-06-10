@@ -5,6 +5,7 @@ import {
   listDraftPosts,
   listPublishedPostsPage,
   listRecipePosts,
+  listRecipePostsPage,
   listRecipePostsByTag,
   listRecipeTags,
   searchPosts
@@ -259,6 +260,77 @@ describe("recipe queries", () => {
     expect(calls).toContainEqual({ name: "eq", args: ["status", "published"] });
     expect(calls).toContainEqual({ name: "eq", args: ["content_kind", "recipe"] });
     expect(calls).toContainEqual({ name: "limit", args: [50] });
+  });
+
+  it("uses pagination and attaches tags for recipe pages", async () => {
+    const calls: Array<{ name: string; args: unknown[] }> = [];
+    const post = {
+      id: "recipe-1",
+      legacy_id: 6,
+      title: "鹰嘴豆炖牛肉",
+      slug: "beef-and-chickpeas",
+      content_html: "<p>body</p>",
+      excerpt: null,
+      status: "published" as const,
+      content_kind: "recipe" as const,
+      created_at: "2022-05-23T21:09:02.478Z",
+      updated_at: "2022-05-23T21:24:19.540Z",
+      published_at: "2022-05-23T21:09:02.478Z"
+    };
+    const builder = {
+      eq(column: string, value: unknown) {
+        calls.push({ name: "eq", args: [column, value] });
+        return builder;
+      },
+      order(column: string, options: unknown) {
+        calls.push({ name: "order", args: [column, options] });
+        return builder;
+      },
+      limit() {
+        throw new Error("must use range for recipe pages");
+      },
+      range(from: number, to: number) {
+        calls.push({ name: "range", args: [from, to] });
+        return Promise.resolve({ data: [post], error: null, count: 21 });
+      },
+      single() {
+        throw new Error("must not fetch single");
+      },
+      maybeSingle() {
+        throw new Error("must not fetch single");
+      }
+    };
+    const client = {
+      from(table: string) {
+        calls.push({ name: "from", args: [table] });
+        return {
+          select(columns: string, options: unknown) {
+            calls.push({ name: "select", args: [columns, options] });
+            return builder;
+          }
+        };
+      },
+      rpc(name: string, args?: unknown) {
+        calls.push({ name: "rpc", args: [name, args] });
+        if (name === "list_tags_for_post") {
+          return Promise.resolve({
+            data: [{ id: "beef", name: "牛肉", slug: "beef" }],
+            error: null
+          });
+        }
+        throw new Error("unexpected rpc");
+      }
+    };
+
+    const result = await listRecipePostsPage({ page: 2, pageSize: 10 }, client);
+
+    expect(result).toMatchObject({ page: 2, pageSize: 10, pageCount: 3, total: 21 });
+    expect(result.posts[0].tags).toEqual([{ id: "beef", name: "牛肉", slug: "beef" }]);
+    expect(calls).toContainEqual({ name: "select", args: ["*", { count: "exact" }] });
+    expect(calls).toContainEqual({ name: "eq", args: ["status", "published"] });
+    expect(calls).toContainEqual({ name: "eq", args: ["content_kind", "recipe"] });
+    expect(calls).toContainEqual({ name: "range", args: [10, 19] });
+    expect(calls).toContainEqual({ name: "rpc", args: ["list_tags_for_post", { target_post_id: "recipe-1" }] });
   });
 
   it("loads recipe tag cloud and tag-filtered recipes through stable RPC contracts", async () => {

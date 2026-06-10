@@ -29,6 +29,10 @@ export type RecipeTag = Tag & {
   post_count: number;
 };
 
+export type PostWithTags = Post & {
+  tags: Tag[];
+};
+
 export type PostSort = "asc" | "desc";
 
 export type PostPageOptions = {
@@ -44,6 +48,10 @@ export type PostPageResult = {
   pageCount: number;
   total: number;
   sort: PostSort;
+};
+
+export type RecipePostPageResult = Omit<PostPageResult, "posts"> & {
+  posts: PostWithTags[];
 };
 
 type QueryError = { message: string; code?: string };
@@ -111,6 +119,25 @@ function recipePosts(): Post[] {
   );
 }
 
+async function attachTagsToPosts(posts: Post[], client?: SupabaseLike): Promise<PostWithTags[]> {
+  if (!client && useFixtureData()) {
+    return posts.map((post) => ({
+      ...post,
+      tags: fixturePostTags
+        .filter((link) => link.postId === post.id)
+        .map((link) => ({ id: tagSlugFromName(link.name), name: link.name, slug: tagSlugFromName(link.name) }))
+    }));
+  }
+
+  const entries = await Promise.all(
+    posts.map(async (post) => ({
+      ...post,
+      tags: await listTagsForPost(post.id, client)
+    }))
+  );
+  return entries;
+}
+
 function resolveClient(client?: SupabaseLike): SupabaseLike {
   return client ?? (createSupabaseServiceClient() as unknown as SupabaseLike);
 }
@@ -173,6 +200,54 @@ export async function listRecipePosts(client?: SupabaseLike): Promise<Post[]> {
   return data ?? [];
 }
 
+export async function listRecipePostsPage(
+  options: PostPageOptions = {},
+  client?: SupabaseLike
+): Promise<RecipePostPageResult> {
+  const page = normalizePositiveInteger(options.page, 1);
+  const pageSize = normalizePositiveInteger(options.pageSize, 10);
+  const sort = normalizeSort(options.sort);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  if (!client && useFixtureData()) {
+    const recipes = sortPosts(
+      fixturePosts.filter((post) => post.status === "published" && post.content_kind === "recipe"),
+      sort
+    );
+    const pagePosts = recipes.slice(from, to + 1);
+    return {
+      posts: await attachTagsToPosts(pagePosts),
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(recipes.length / pageSize)),
+      total: recipes.length,
+      sort
+    };
+  }
+
+  const supabase = resolveClient(client);
+  const { data, error, count } = await supabase
+    .from("posts")
+    .select("*", { count: "exact" })
+    .eq("status", "published")
+    .eq("content_kind", "recipe")
+    .order("published_at", { ascending: sort === "asc", nullsFirst: false })
+    .range(from, to);
+
+  throwIfError(error);
+  const posts = data ?? [];
+  const total = count ?? posts.length;
+  return {
+    posts: await attachTagsToPosts(posts, client),
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    total,
+    sort
+  };
+}
+
 export async function listRecipeTags(client?: SupabaseLike): Promise<RecipeTag[]> {
   if (!client && useFixtureData()) {
     const counts = new Map<string, RecipeTag>();
@@ -213,6 +288,28 @@ export async function listRecipePostsByTag(tagSlug: string, client?: SupabaseLik
   const { data, error } = await result;
   throwIfError(error);
   return (data as Post[] | null) ?? [];
+}
+
+export async function listRecipePostsByTagPage(
+  tagSlug: string,
+  options: PostPageOptions = {},
+  client?: SupabaseLike
+): Promise<RecipePostPageResult> {
+  const page = normalizePositiveInteger(options.page, 1);
+  const pageSize = normalizePositiveInteger(options.pageSize, 10);
+  const sort = normalizeSort(options.sort);
+  const from = (page - 1) * pageSize;
+  const taggedPosts = sortPosts(await listRecipePostsByTag(tagSlug, client), sort);
+  const pagePosts = taggedPosts.slice(from, from + pageSize);
+
+  return {
+    posts: await attachTagsToPosts(pagePosts, client),
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(taggedPosts.length / pageSize)),
+    total: taggedPosts.length,
+    sort
+  };
 }
 
 export async function listTagsForPost(postId: string, client?: SupabaseLike): Promise<Tag[]> {
