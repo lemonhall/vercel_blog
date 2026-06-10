@@ -1,34 +1,35 @@
-# Agent Instructions
+# Agent 工作说明
 
-## Project Scope
+## 项目范围
 
-This repository is a Vercel-friendly rewrite of Lemon Uncle's personal blog.
+本仓库是柠檬叔个人博客的 Vercel 友好重写版。
 
-Current v1 scope:
+v1 当前范围：
 
-- Build the Next.js/Supabase/Vercel Blob application shell.
-- Keep Supabase empty tables/schema ready.
-- Provide public reading pages, basic `ILIKE` search, single-admin editing, and image upload.
+- 建立 Next.js / Supabase / Vercel Blob 应用骨架。
+- 保留 Supabase 空表和 schema。
+- 提供公开阅读页、基础 `ILIKE` 搜索、单人后台编辑和图片上传。
 
-Migration scope:
+迁移范围：
 
-- All production migration work belongs to v2.
-- Do not run migration against `refs/lemon_blog/app.db` as acceptance evidence.
-- Do not treat `refs/` as authoritative production data.
-- Wait for Linode data to be pulled locally before starting v2 migration.
+- 所有生产迁移工作都属于 v2。
+- 不要把 `refs/lemon_blog/app.db` 当作迁移验收依据。
+- 不要把 `refs/` 当作生产真实数据源。
+- 等 Linode 数据拉到本地后，再启动 v2 迁移。
 
-## Required Documents
+## 必读文档
 
-- PRD: `docs/prd/PRD-0001-vercel-blog-migration.md`
-- v1 plan: `docs/plan/v1-index.md`
-- v2 migration plan: `docs/plan/v2-index.md`
-- ECNs: `docs/ecn/`
+- PRD：`docs/prd/PRD-0001-vercel-blog-migration.md`
+- v1 计划：`docs/plan/v1-index.md`
+- v2 迁移计划：`docs/plan/v2-index.md`
+- 环境变量指南：`docs/setup/vercel-supabase-env.md`
+- ECN：`docs/ecn/`
 
-If implementation changes scope, update ECN and plan docs before continuing.
+如果实现改变范围，先更新 ECN 和计划文档，再继续写代码。
 
-## Commands
+## 常用命令
 
-Use PowerShell syntax.
+使用 PowerShell 语法。
 
 ```powershell
 npm install
@@ -37,39 +38,40 @@ npm run build
 npm run e2e
 ```
 
-For E2E, Playwright config sets fixture env automatically.
+E2E 的 fixture 环境变量由 Playwright 配置自动注入。
 
-## Playwright Browser
+## Playwright 浏览器
 
-- Use the user's installed Chrome for Playwright E2E.
-- Configure Playwright projects with `channel: "chrome"`.
-- Do not ask to download Playwright browsers unless the user explicitly requests it.
-- If Playwright says its bundled browser is missing, first switch to system Chrome.
+- 默认使用用户本机已安装的 Chrome。
+- Playwright 项目配置里设置 `channel: "chrome"`。
+- 不要因为 Playwright 提示 bundled browser 缺失就要求下载浏览器。
+- 如果报缺少 `chromium_headless_shell`，先切换系统 Chrome 再重跑。
 
-## Files And Safety
+## 文件与安全
 
-- `refs/` must stay ignored by git.
-- Never commit `.env`, Supabase service keys, Blob tokens, or APNs secrets.
-- Do not write user uploads to the project filesystem.
-- Vercel Blob is the only intended runtime image storage for uploads.
-- Supabase Postgres is the database.
+- `refs/` 必须保持 git 忽略。
+- 不要提交 `.env`、Supabase secret key、Blob token 或 APNs 密钥。
+- 用户上传不要写入项目文件系统。
+- 运行时图片上传只使用 Vercel Blob。
+- 数据库使用 Supabase Postgres。
 
-## Development Discipline
+## 开发纪律
 
-- Follow the vN plan and Req ID traceability.
-- Prefer tests before implementation.
-- Run `npm test` and `npm run build` before claiming a code change is complete.
-- Run `npm run e2e` for user-facing workflow changes when Playwright browsers are available.
-- If E2E cannot run because browser binaries are missing, report that clearly.
+- 按 vN 计划和 Req ID 追溯推进。
+- 优先先写测试，再写实现。
+- 声称代码完成前，至少运行 `npm test` 和 `npm run build`。
+- 涉及用户流程时运行 `npm run e2e`。
+- 如果 E2E 因本地环境失败，要明确报告失败原因。
 
-## Frontend Style
+## 前端风格
 
-Use `E:\development\homestay` as the visual reference:
+参考 `E:\development\homestay`：
 
-- Warm beige background.
-- Dark ink text.
-- Muted grey-green accent.
-- Serif display headings.
-- Restrained surfaces, thin lines, and quiet shadows.
+- 暖米色背景。
+- 深墨色文字。
+- 灰绿色强调色。
+- serif 展示标题。
+- 克制的表面、细线和柔和阴影。
 
-Keep the blog usable and readable. Do not turn it into a marketing landing page.
+博客首先要好读、耐看，不要做成营销首页。
+

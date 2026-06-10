@@ -1,31 +1,52 @@
 export type ServerEnv = {
+  appEnv: "development" | "production";
   supabaseUrl: string;
-  supabaseAnonKey: string;
-  supabaseServiceRoleKey: string;
+  supabasePublishableKey: string;
+  supabaseSecretKey: string;
   blobReadWriteToken: string;
   adminPassword: string;
   authCookieSecret: string;
 };
 
 const required = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
   "BLOB_READ_WRITE_TOKEN",
   "ADMIN_PASSWORD",
   "AUTH_COOKIE_SECRET"
 ] as const;
 
+function getAppEnv(input: Record<string, string | undefined>): "development" | "production" {
+  return input.APP_ENV === "production" ? "production" : "development";
+}
+
 export function parseServerEnv(input: Record<string, string | undefined>): ServerEnv {
-  const missing = required.filter((key) => !input[key]?.trim());
+  const missing: string[] = required.filter((key) => !input[key]?.trim());
+  const appEnv = getAppEnv(input);
+  const scopedPrefix = appEnv === "production" ? "SUPABASE_PROD" : "SUPABASE_DEV";
+  const supabaseUrl = input.NEXT_PUBLIC_SUPABASE_URL ?? input[`${scopedPrefix}_URL`];
+  const publishableKey =
+    input.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    input.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    input[`${scopedPrefix}_PUBLISHABLE_KEY`];
+  const secretKey =
+    input.SUPABASE_SECRET_KEY ?? input.SUPABASE_SERVICE_ROLE_KEY ?? input[`${scopedPrefix}_SECRET_KEY`];
+  if (!supabaseUrl?.trim()) {
+    missing.push(`${scopedPrefix}_URL`);
+  }
+  if (!publishableKey?.trim()) {
+    missing.push(`${scopedPrefix}_PUBLISHABLE_KEY`);
+  }
+  if (!secretKey?.trim()) {
+    missing.push(`${scopedPrefix}_SECRET_KEY`);
+  }
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
   }
 
   return {
-    supabaseUrl: input.NEXT_PUBLIC_SUPABASE_URL!,
-    supabaseAnonKey: input.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    supabaseServiceRoleKey: input.SUPABASE_SERVICE_ROLE_KEY!,
+    appEnv,
+    supabaseUrl: supabaseUrl!,
+    supabasePublishableKey: publishableKey!,
+    supabaseSecretKey: secretKey!,
     blobReadWriteToken: input.BLOB_READ_WRITE_TOKEN!,
     adminPassword: input.ADMIN_PASSWORD!,
     authCookieSecret: input.AUTH_COOKIE_SECRET!
@@ -35,4 +56,3 @@ export function parseServerEnv(input: Record<string, string | undefined>): Serve
 export function getServerEnv(): ServerEnv {
   return parseServerEnv(process.env);
 }
-

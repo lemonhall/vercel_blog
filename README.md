@@ -35,27 +35,12 @@ v2 做迁移：
 
 ## 环境变量
 
-复制 `.env.example` 并填写：
+完整配置指南见：[Vercel 与 Supabase 环境变量配置指南](./docs/setup/vercel-supabase-env.md)。
+
+本地创建 `.env`：
 
 ```powershell
 Copy-Item .env.example .env
-```
-
-必填项：
-
-```text
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-BLOB_READ_WRITE_TOKEN=
-ADMIN_PASSWORD=
-AUTH_COOKIE_SECRET=
-```
-
-测试 fixture 模式可额外设置：
-
-```text
-USE_FIXTURE_DATA=1
 ```
 
 ## Supabase 初始化
@@ -113,4 +98,3 @@ refs/                ignored legacy reference snapshot
 ## 迁移说明
 
 `refs/` 是旧项目快照，只能用于结构参考。真实迁移必须等待 Linode 数据拉取完成后进入 v2，不要用当前 `refs/lemon_blog/app.db` 当作准数据源。
-

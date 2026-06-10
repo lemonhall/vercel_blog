@@ -13,9 +13,10 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       USE_FIXTURE_DATA: "1",
-      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
-      SUPABASE_SERVICE_ROLE_KEY: "service",
+      APP_ENV: "development",
+      SUPABASE_DEV_URL: "https://example.supabase.co",
+      SUPABASE_DEV_PUBLISHABLE_KEY: "publishable",
+      SUPABASE_DEV_SECRET_KEY: "secret-key",
       BLOB_READ_WRITE_TOKEN: "blob",
       ADMIN_PASSWORD: "secret",
       AUTH_COOKIE_SECRET: "cookie-secret"
