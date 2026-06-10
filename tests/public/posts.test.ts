@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sanitizePostHtml } from "@/lib/html";
-import { getPostBySlug, listPublishedPostsPage, searchPosts } from "@/lib/posts";
+import { getPostBySlug, listDraftPosts, listPublishedPostsPage, searchPosts } from "@/lib/posts";
 
 describe("sanitizePostHtml", () => {
   it("removes script tags and event handlers while keeping article markup", () => {
@@ -153,6 +153,55 @@ describe("listPublishedPostsPage", () => {
     const result = await listPublishedPostsPage({ page: -10, pageSize: 10, sort: "oldest" }, client);
 
     expect(result).toMatchObject({ page: 1, pageCount: 1, sort: "desc" });
+  });
+});
+
+describe("listDraftPosts", () => {
+  it("loads drafts ordered by latest update for admin management", async () => {
+    const calls: Array<{ name: string; args: unknown[] }> = [];
+    const builder = {
+      eq(column: string, value: unknown) {
+        calls.push({ name: "eq", args: [column, value] });
+        return builder;
+      },
+      order(column: string, options: unknown) {
+        calls.push({ name: "order", args: [column, options] });
+        return builder;
+      },
+      limit(count: number) {
+        calls.push({ name: "limit", args: [count] });
+        return Promise.resolve({ data: [], error: null });
+      },
+      range() {
+        throw new Error("must not paginate drafts yet");
+      },
+      single() {
+        throw new Error("must not fetch single");
+      },
+      maybeSingle() {
+        throw new Error("must not fetch single");
+      }
+    };
+    const client = {
+      from(table: string) {
+        calls.push({ name: "from", args: [table] });
+        return {
+          select(columns: string) {
+            calls.push({ name: "select", args: [columns] });
+            return builder;
+          }
+        };
+      },
+      rpc() {
+        throw new Error("must not search");
+      }
+    };
+
+    await listDraftPosts(client);
+
+    expect(calls).toContainEqual({ name: "eq", args: ["status", "draft"] });
+    expect(calls).toContainEqual({ name: "order", args: ["updated_at", { ascending: false, nullsFirst: false }] });
+    expect(calls).toContainEqual({ name: "limit", args: [50] });
   });
 });
 

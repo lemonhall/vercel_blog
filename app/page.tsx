@@ -1,4 +1,6 @@
 import { listPublishedPostsPage, type PostSort } from "@/lib/posts";
+import { PostAdminActions } from "@/components/PostAdminActions";
+import { isAdminSessionValid } from "@/lib/admin-session";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const wide = params?.wide === "1";
   const currentPage = parsePage(params?.page);
   const result = await listPublishedPostsPage({ page: currentPage, pageSize: 10, sort });
+  const isAdmin = await isAdminSessionValid();
   const posts = result.posts;
   const returnTo = hrefFor({ page: result.page, sort: result.sort, wide });
 
@@ -74,18 +77,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </h2>
               <p className="post-meta">{formatDate(post.published_at ?? post.created_at)}</p>
               {post.excerpt ? <p className="post-excerpt">{post.excerpt}</p> : null}
-              <div className="post-actions">
-                <a className="icon-action" aria-label={`编辑 ${post.title}`} href={`/admin?edit=${encodeURIComponent(post.slug)}`}>
-                  ✏️
-                </a>
-                <form action="/api/admin/posts/delete" method="post">
-                  <input type="hidden" name="slug" value={post.slug} />
-                  <input type="hidden" name="return_to" value={returnTo} />
-                  <button className="icon-action" type="submit" aria-label={`删除 ${post.title}`}>
-                    🗑️
-                  </button>
-                </form>
-              </div>
+              {isAdmin ? <PostAdminActions slug={post.slug} title={post.title} returnTo={returnTo} /> : null}
             </article>
           ))}
         </div>

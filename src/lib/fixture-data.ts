@@ -25,6 +25,18 @@ export const fixturePosts: Post[] = [
     updated_at: "2022-05-23T21:24:19.540Z",
     published_at: "2022-05-23T21:09:02.478Z"
   },
+  {
+    id: "fixture-draft-1",
+    legacy_id: 18,
+    title: "旧草稿",
+    slug: "old-draft",
+    content_html: "<p>这是一篇还没有发布的草稿。</p>",
+    excerpt: "这是一篇还没有发布的草稿。",
+    status: "draft",
+    created_at: "2022-05-24T09:00:00.000Z",
+    updated_at: "2022-05-24T10:00:00.000Z",
+    published_at: null
+  },
   ...Array.from({ length: 12 }, (_, index) => {
     const day = String(index + 1).padStart(2, "0");
     return {

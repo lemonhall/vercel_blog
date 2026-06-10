@@ -13,7 +13,8 @@ test("public reader can browse and search posts", async ({ page }) => {
   await page.getByRole("link", { name: "旧到新" }).click();
   await expect(page.getByRole("link", { name: "第一篇日记", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "下一页" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "编辑 第一篇日记" })).toHaveAttribute("href", /\/admin\?edit=first-note/);
+  await expect(page.getByRole("link", { name: "编辑 第一篇日记" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "删除 第一篇日记" })).toHaveCount(0);
 
   await page.getByRole("link", { name: "搜索" }).click();
   await page.getByLabel("搜索关键词").fill("牛肉");
@@ -23,8 +24,8 @@ test("public reader can browse and search posts", async ({ page }) => {
   await page.getByRole("link", { name: "鹰嘴豆炖牛肉" }).click();
   await expect(page.getByRole("heading", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
   await expect(page.locator(".article-body img")).toHaveAttribute("src", "https://assets.example/beef.jpg");
-  await expect(page.getByRole("link", { name: "编辑 鹰嘴豆炖牛肉" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "删除 鹰嘴豆炖牛肉" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "编辑 鹰嘴豆炖牛肉" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "删除 鹰嘴豆炖牛肉" })).toHaveCount(0);
 });
 
 test("admin login accepts configured password", async ({ page }) => {
@@ -32,6 +33,37 @@ test("admin login accepts configured password", async ({ page }) => {
   await page.getByLabel("后台密码").fill("secret");
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page.getByRole("textbox", { name: "标题" })).toBeVisible();
+});
+
+test("admin can see post actions and gets confirmation before logical delete", async ({ page }) => {
+  await page.goto("/admin");
+  await page.getByLabel("后台密码").fill("secret");
+  await page.getByRole("button", { name: "登录" }).click();
+
+  await page.goto("/?sort=asc");
+  await expect(page.getByRole("link", { name: "编辑 第一篇日记" })).toHaveAttribute("href", /\/admin\?edit=first-note/);
+  const deleteButton = page.getByRole("button", { name: "删除 第一篇日记" });
+  await expect(deleteButton).toBeVisible();
+
+  page.on("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("移入草稿");
+    await dialog.dismiss();
+  });
+  await deleteButton.click();
+  await expect(page).toHaveURL(/\/\?sort=asc/);
+});
+
+test("admin can manage drafts and reopen a draft in the editor", async ({ page }) => {
+  await page.goto("/admin");
+  await page.getByLabel("后台密码").fill("secret");
+  await page.getByRole("button", { name: "登录" }).click();
+
+  await expect(page.getByRole("heading", { name: "草稿管理" })).toBeVisible();
+  await expect(page.getByText("旧草稿")).toBeVisible();
+  await page.getByRole("link", { name: "编辑 旧草稿" }).click();
+
+  await expect(page.getByRole("textbox", { name: "标题" })).toHaveValue("旧草稿");
+  await expect(page.getByLabel("状态")).toHaveValue("draft");
 });
 
 test("admin editor exposes upgraded controls and mobile friendly toolbar", async ({ page, isMobile }) => {

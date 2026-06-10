@@ -10,8 +10,9 @@
 |---|---|---|---|---|
 | M1 文档与追溯 | 建立 ECN-0005、v3-index、v3 执行计划 | v3 文档存在；每个需求点有验收命令；无乱码 | 乱码扫描无命中 | done |
 | M2 阅读控制 | 柠檬品牌、favicon、宽模式、分页、排序、footer | 首页可分页；排序链接改变文章顺序；宽模式 class 生效；footer 可见 | `npm test -- tests/public/posts.test.ts` 7 passed；`npm run e2e` 4 passed | done |
-| M3 管理动作 | 列表和详情页编辑/逻辑删除入口，未登录跳后台，已登录执行 | 未登录删除跳 `/admin`；已登录删除更新 `status=draft`；编辑页能按 slug 预填文章 | `npm test -- tests/admin/auth.test.ts` 4 passed；`npm run e2e` 4 passed | done |
-| M4 发布验证 | 全量验证与文档回填 | 单测、类型、构建、E2E 全绿；差异列表更新 | `npm test` 24 passed；`npx tsc --noEmit` 通过；`npm run build` 通过；`npm run e2e` 4 passed | done |
+| M3 管理动作 | 列表和详情页编辑/逻辑删除入口，未登录隐藏，已登录执行 | 访客看不到编辑/删除；已登录删除先确认再更新 `status=draft`；编辑页能按 slug 预填文章 | `npm test -- tests/admin/auth.test.ts` 4 passed；`npm run e2e` 10 passed | done |
+| M4 发布验证 | 全量验证与文档回填 | 单测、类型、构建、E2E 全绿；差异列表更新 | `npm test` 26 passed；`npx tsc --noEmit` 通过；`npm run build` 通过；`npm run e2e` 10 passed | done |
+| M5 草稿管理补齐 | 后台列出草稿，支持从草稿列表回到编辑器 | 草稿按更新时间倒序列出；逻辑删除降级后的文章可在后台重新编辑或发布 | `npm test -- tests/public/posts.test.ts` 9 passed；`npm run e2e` 10 passed | done |
 
 ## 计划索引
 
@@ -31,3 +32,4 @@
 ## 差异列表
 
 - 当前 v3 范围已完成。逻辑删除使用现有 `draft` 状态隐藏公开文章，不需要修改生产库 check constraint。
+- 已补齐草稿管理：后台登录后能看到草稿列表，访客前台不显示编辑/删除按钮，删除动作必须先经浏览器确认。

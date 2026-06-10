@@ -97,7 +97,10 @@ function resolveClient(client?: SupabaseLike): SupabaseLike {
 
 export async function listPublishedPosts(client?: SupabaseLike): Promise<Post[]> {
   if (!client && useFixtureData()) {
-    return sortPosts(fixturePosts, "desc").slice(0, 50);
+    return sortPosts(
+      fixturePosts.filter((post) => post.status === "published"),
+      "desc"
+    ).slice(0, 50);
   }
 
   const supabase = resolveClient(client);
@@ -106,6 +109,26 @@ export async function listPublishedPosts(client?: SupabaseLike): Promise<Post[]>
     .select("*")
     .eq("status", "published")
     .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(50);
+
+  throwIfError(error);
+  return data ?? [];
+}
+
+export async function listDraftPosts(client?: SupabaseLike): Promise<Post[]> {
+  if (!client && useFixtureData()) {
+    return fixturePosts
+      .filter((post) => post.status === "draft")
+      .sort((left, right) => right.updated_at.localeCompare(left.updated_at))
+      .slice(0, 50);
+  }
+
+  const supabase = resolveClient(client);
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("status", "draft")
+    .order("updated_at", { ascending: false, nullsFirst: false })
     .limit(50);
 
   throwIfError(error);
@@ -162,7 +185,7 @@ export async function getPostBySlug(slug: string, client?: SupabaseLike): Promis
   const normalizedSlug = normalizeRouteSlug(slug);
 
   if (!client && useFixtureData()) {
-    return fixturePosts.find((post) => post.slug === normalizedSlug) ?? null;
+    return fixturePosts.find((post) => post.slug === normalizedSlug && post.status === "published") ?? null;
   }
 
   const supabase = resolveClient(client);
@@ -211,7 +234,9 @@ export async function searchPublishedPosts(query: string): Promise<Post[]> {
   }
 
   if (useFixtureData()) {
-    return fixturePosts.filter((post) => post.title.includes(q) || post.content_html.includes(q));
+    return fixturePosts.filter(
+      (post) => post.status === "published" && (post.title.includes(q) || post.content_html.includes(q))
+    );
   }
 
   return searchPosts(createSupabaseServiceClient() as unknown as Pick<SupabaseLike, "rpc">, q);
