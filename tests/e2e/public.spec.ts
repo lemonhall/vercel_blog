@@ -38,10 +38,15 @@ test("admin editor exposes upgraded controls and mobile friendly toolbar", async
   await page.goto("/admin");
   await page.getByLabel("后台密码").fill("secret");
   await page.getByRole("button", { name: "登录" }).click();
+  await expect(page.locator("main.page")).toHaveClass(/page-wide/);
 
   for (const name of ["标题 1", "项目符号", "链接", "图片", "表格", "代码块", "撤销", "重做"]) {
-    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+    const button = page.getByRole("button", { name, exact: true });
+    await expect(button).toBeVisible();
+    await expect(button).toHaveAttribute("title", name);
   }
+
+  await expect(page.getByRole("button", { name: "图片", exact: true })).toHaveText("图片");
 
   const metrics = await page.locator(".editor-toolbar").evaluate((toolbar) => {
     const firstButton = toolbar.querySelector("button");
@@ -62,7 +67,13 @@ test("admin editor exposes upgraded controls and mobile friendly toolbar", async
   expect(metrics.buttonHeight).toBeGreaterThanOrEqual(44);
   expect(metrics.position).toBe("sticky");
   expect(metrics.toolbarTop).toBeGreaterThanOrEqual(0);
-  if (isMobile) {
-    expect(metrics.toolbarScroll).toBeGreaterThan(metrics.toolbarClient);
-  }
+  expect(metrics.toolbarScroll).toBeLessThanOrEqual(metrics.toolbarClient + 1);
+
+  await page.locator(".editor-surface").evaluate((surface) => {
+    (surface as HTMLElement).style.minHeight = "1800px";
+  });
+  await page.evaluate(() => window.scrollTo(0, 900));
+  const stickyTop = await page.locator(".editor-toolbar").evaluate((toolbar) => toolbar.getBoundingClientRect().top);
+  expect(stickyTop).toBeGreaterThanOrEqual(isMobile ? 96 : 54);
+  expect(stickyTop).toBeLessThanOrEqual(isMobile ? 124 : 84);
 });

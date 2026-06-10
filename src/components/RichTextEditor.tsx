@@ -118,15 +118,22 @@ export function RichTextEditor({ name, initialHtml = "" }: RichTextEditorProps) 
     editor?.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
   }
 
+  function buttonProps(label: string) {
+    return {
+      "aria-label": label,
+      title: label
+    };
+  }
+
   return (
     <div className="editor">
       <div className="editor-toolbar" aria-label="富文本工具栏">
-        <button type="button" aria-label="正文" onClick={() => editor?.chain().focus().setParagraph().run()}>
+        <button type="button" {...buttonProps("正文")} onClick={() => editor?.chain().focus().setParagraph().run()}>
           P
         </button>
         <button
           type="button"
-          aria-label="标题 1"
+          {...buttonProps("标题 1")}
           aria-pressed={editor?.isActive("heading", { level: 1 }) ?? false}
           onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
         >
@@ -134,7 +141,7 @@ export function RichTextEditor({ name, initialHtml = "" }: RichTextEditorProps) 
         </button>
         <button
           type="button"
-          aria-label="标题 2"
+          {...buttonProps("标题 2")}
           aria-pressed={editor?.isActive("heading", { level: 2 }) ?? false}
           onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
         >
@@ -142,7 +149,7 @@ export function RichTextEditor({ name, initialHtml = "" }: RichTextEditorProps) 
         </button>
         <button
           type="button"
-          aria-label="粗体"
+          {...buttonProps("粗体")}
           aria-pressed={editor?.isActive("bold") ?? false}
           onClick={() => editor?.chain().focus().toggleBold().run()}
         >
@@ -150,7 +157,7 @@ export function RichTextEditor({ name, initialHtml = "" }: RichTextEditorProps) 
         </button>
         <button
           type="button"
-          aria-label="斜体"
+          {...buttonProps("斜体")}
           aria-pressed={editor?.isActive("italic") ?? false}
           onClick={() => editor?.chain().focus().toggleItalic().run()}
         >
@@ -158,7 +165,7 @@ export function RichTextEditor({ name, initialHtml = "" }: RichTextEditorProps) 
         </button>
         <button
           type="button"
-          aria-label="下划线"
+          {...buttonProps("下划线")}
           aria-pressed={editor?.isActive("underline") ?? false}
           onClick={() => editor?.chain().focus().toggleUnderline().run()}
         >
@@ -166,7 +173,7 @@ export function RichTextEditor({ name, initialHtml = "" }: RichTextEditorProps) 
         </button>
         <button
           type="button"
-          aria-label="删除线"
+          {...buttonProps("删除线")}
           aria-pressed={editor?.isActive("strike") ?? false}
           onClick={() => editor?.chain().focus().toggleStrike().run()}
         >
@@ -174,65 +181,65 @@ export function RichTextEditor({ name, initialHtml = "" }: RichTextEditorProps) 
         </button>
         <button
           type="button"
-          aria-label="行内代码"
+          {...buttonProps("行内代码")}
           aria-pressed={editor?.isActive("code") ?? false}
           onClick={() => editor?.chain().focus().toggleCode().run()}
         >
           {"</>"}
         </button>
-        <button type="button" aria-label="引用" onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
+        <button type="button" {...buttonProps("引用")} onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
           “”
         </button>
-        <button type="button" aria-label="项目符号" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
+        <button type="button" {...buttonProps("项目符号")} onClick={() => editor?.chain().focus().toggleBulletList().run()}>
           •
         </button>
-        <button type="button" aria-label="编号列表" onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
+        <button type="button" {...buttonProps("编号列表")} onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
           1.
         </button>
-        <button type="button" aria-label="左对齐" onClick={() => editor?.chain().focus().setTextAlign("left").run()}>
+        <button type="button" {...buttonProps("左对齐")} onClick={() => editor?.chain().focus().setTextAlign("left").run()}>
           L
         </button>
-        <button type="button" aria-label="居中" onClick={() => editor?.chain().focus().setTextAlign("center").run()}>
+        <button type="button" {...buttonProps("居中")} onClick={() => editor?.chain().focus().setTextAlign("center").run()}>
           C
         </button>
-        <button type="button" aria-label="右对齐" onClick={() => editor?.chain().focus().setTextAlign("right").run()}>
+        <button type="button" {...buttonProps("右对齐")} onClick={() => editor?.chain().focus().setTextAlign("right").run()}>
           R
         </button>
-        <button type="button" aria-label="链接" onClick={setLink}>
+        <button type="button" {...buttonProps("链接")} onClick={setLink}>
           🔗
         </button>
-        <button type="button" aria-label="取消链接" onClick={() => editor?.chain().focus().unsetLink().run()}>
+        <button type="button" {...buttonProps("取消链接")} onClick={() => editor?.chain().focus().unsetLink().run()}>
           ⛓
         </button>
-        <button type="button" aria-label="图片" onClick={() => fileInputRef.current?.click()}>
-          🖼
+        <button type="button" {...buttonProps("图片")} onClick={() => fileInputRef.current?.click()}>
+          图片
         </button>
         <button
           type="button"
-          aria-label="表格"
+          {...buttonProps("表格")}
           onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         >
           表
         </button>
-        <button type="button" aria-label="增加行" onClick={() => editor?.chain().focus().addRowAfter().run()}>
+        <button type="button" {...buttonProps("增加行")} onClick={() => editor?.chain().focus().addRowAfter().run()}>
           +行
         </button>
-        <button type="button" aria-label="增加列" onClick={() => editor?.chain().focus().addColumnAfter().run()}>
+        <button type="button" {...buttonProps("增加列")} onClick={() => editor?.chain().focus().addColumnAfter().run()}>
           +列
         </button>
-        <button type="button" aria-label="删除表格" onClick={() => editor?.chain().focus().deleteTable().run()}>
+        <button type="button" {...buttonProps("删除表格")} onClick={() => editor?.chain().focus().deleteTable().run()}>
           删表
         </button>
-        <button type="button" aria-label="代码块" onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>
+        <button type="button" {...buttonProps("代码块")} onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>
           Code
         </button>
-        <button type="button" aria-label="分割线" onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
+        <button type="button" {...buttonProps("分割线")} onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
           —
         </button>
-        <button type="button" aria-label="撤销" onClick={() => editor?.chain().focus().undo().run()}>
+        <button type="button" {...buttonProps("撤销")} onClick={() => editor?.chain().focus().undo().run()}>
           ↶
         </button>
-        <button type="button" aria-label="重做" onClick={() => editor?.chain().focus().redo().run()}>
+        <button type="button" {...buttonProps("重做")} onClick={() => editor?.chain().focus().redo().run()}>
           ↷
         </button>
         <label className="visually-hidden">

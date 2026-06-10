@@ -278,7 +278,8 @@ a {
 .admin-form {
   display: grid;
   gap: 14px;
-  max-width: 760px;
+  width: 100%;
+  max-width: none;
   min-width: 0;
 }
 
@@ -305,6 +306,7 @@ a {
   border-bottom: 1px solid var(--line);
   border-radius: 8px 8px 0 0;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
   position: sticky;
@@ -314,11 +316,7 @@ a {
   max-width: 100%;
   min-width: 0;
   width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 .editor-toolbar button {

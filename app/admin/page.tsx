@@ -27,7 +27,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const nextPath = params?.next ?? nextPathForEdit(params?.edit);
 
   return (
-    <main className="page">
+    <main className={isAuthed ? "page page-wide" : "page"}>
       <h1 className="page-title">后台</h1>
       {isAuthed ? (
         <form className="admin-form" action="/api/admin/posts" method="post">
