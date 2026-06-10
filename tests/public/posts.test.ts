@@ -16,6 +16,23 @@ describe("sanitizePostHtml", () => {
     expect(html).not.toContain("onclick");
     expect(html).not.toContain("onerror");
   });
+
+  it("keeps upgraded editor output for links tables code images and text alignment", () => {
+    const html = sanitizePostHtml(
+      '<h2 style="text-align:center">标题</h2><p style="text-align:right;color:red">正文</p><a href="https://example.com" onclick="bad()">链接</a><table><tbody><tr><th colspan="2">头</th></tr><tr><td rowspan="2">格</td><td>值</td></tr></tbody></table><pre><code class="language-js">console.log(1)</code></pre><img src="https://assets.example/a.jpg" alt="图">'
+    );
+
+    expect(html).toContain('<h2 style="text-align:center">标题</h2>');
+    expect(html).toContain('<p style="text-align:right">正文</p>');
+    expect(html).toContain('href="https://example.com"');
+    expect(html).toContain("<table>");
+    expect(html).toContain('colspan="2"');
+    expect(html).toContain('rowspan="2"');
+    expect(html).toContain('<code class="language-js">');
+    expect(html).toContain('<img src="https://assets.example/a.jpg" alt="图" />');
+    expect(html).not.toContain("onclick");
+    expect(html).not.toContain("color:red");
+  });
 });
 
 describe("searchPosts", () => {

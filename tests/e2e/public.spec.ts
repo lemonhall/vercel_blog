@@ -31,5 +31,38 @@ test("admin login accepts configured password", async ({ page }) => {
   await page.goto("/admin");
   await page.getByLabel("后台密码").fill("secret");
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page.getByLabel("标题")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "标题" })).toBeVisible();
+});
+
+test("admin editor exposes upgraded controls and mobile friendly toolbar", async ({ page, isMobile }) => {
+  await page.goto("/admin");
+  await page.getByLabel("后台密码").fill("secret");
+  await page.getByRole("button", { name: "登录" }).click();
+
+  for (const name of ["标题 1", "项目符号", "链接", "图片", "表格", "代码块", "撤销", "重做"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+
+  const metrics = await page.locator(".editor-toolbar").evaluate((toolbar) => {
+    const firstButton = toolbar.querySelector("button");
+    const buttonRect = firstButton?.getBoundingClientRect();
+    const toolbarRect = toolbar.getBoundingClientRect();
+    return {
+      viewport: document.documentElement.clientWidth,
+      bodyScroll: document.documentElement.scrollWidth,
+      toolbarScroll: toolbar.scrollWidth,
+      toolbarClient: toolbar.clientWidth,
+      buttonHeight: buttonRect?.height ?? 0,
+      position: window.getComputedStyle(toolbar).position,
+      toolbarTop: toolbarRect.top
+    };
+  });
+
+  expect(metrics.bodyScroll).toBeLessThanOrEqual(metrics.viewport + 1);
+  expect(metrics.buttonHeight).toBeGreaterThanOrEqual(44);
+  expect(metrics.position).toBe("sticky");
+  expect(metrics.toolbarTop).toBeGreaterThanOrEqual(0);
+  if (isMobile) {
+    expect(metrics.toolbarScroll).toBeGreaterThan(metrics.toolbarClient);
+  }
 });

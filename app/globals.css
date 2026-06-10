@@ -279,6 +279,7 @@ a {
   display: grid;
   gap: 14px;
   max-width: 760px;
+  min-width: 0;
 }
 
 .admin-form input,
@@ -295,31 +296,110 @@ a {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-strong);
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible;
 }
 
 .editor-toolbar {
   border-bottom: 1px solid var(--line);
+  border-radius: 8px 8px 0 0;
   display: flex;
   gap: 8px;
   padding: 8px;
+  position: sticky;
+  top: 62px;
+  z-index: 9;
+  background: var(--surface-strong);
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .editor-toolbar button {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fbf7ee;
-  min-width: 34px;
-  min-height: 34px;
+  color: var(--ink);
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 14px;
+  touch-action: manipulation;
+}
+
+.editor-toolbar button[aria-pressed="true"] {
+  border-color: rgba(49, 66, 55, 0.5);
+  background: rgba(73, 102, 79, 0.14);
 }
 
 .editor-surface {
   min-height: 280px;
   padding: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .editor-surface .ProseMirror {
   min-height: 240px;
+  font-size: 16px;
   outline: none;
+}
+
+.editor-surface .ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.editor-surface table,
+.article-body table {
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.editor-surface th,
+.editor-surface td,
+.article-body th,
+.article-body td {
+  border: 1px solid var(--line);
+  min-width: 88px;
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.editor-surface th,
+.article-body th {
+  background: rgba(73, 102, 79, 0.1);
+}
+
+.editor-surface img {
+  max-width: 100%;
+  height: auto;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .site-footer {
@@ -349,5 +429,16 @@ a {
   .page-title,
   .article h1 {
     font-size: 28px;
+  }
+
+  .page {
+    width: min(100% - 20px, 980px);
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .editor-toolbar {
+    margin: 0 -1px;
+    padding-bottom: 10px;
+    top: 104px;
   }
 }
