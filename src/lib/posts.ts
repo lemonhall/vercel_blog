@@ -16,29 +16,40 @@ export type Post = {
   published_at: string | null;
 };
 
-type QueryResult<T> = PromiseLike<{ data: T | null; error: { message: string } | null }>;
+type QueryError = { message: string; code?: string };
+
+type QueryResult<T> = PromiseLike<{ data: T | null; error: QueryError | null }>;
 
 type SupabaseOrderBuilder<T> = {
   order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): QueryResult<T>;
 };
 
-type SupabaseSelectBuilder<T> = {
-  eq(column: string, value: unknown): SupabaseSelectBuilder<T>;
-  order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): SupabaseSelectBuilder<T>;
-  limit(count: number): QueryResult<T>;
-  single(): QueryResult<T>;
+type SupabasePostSelectBuilder = {
+  eq(column: string, value: unknown): SupabasePostSelectBuilder;
+  order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): SupabasePostSelectBuilder;
+  limit(count: number): QueryResult<Post[]>;
+  single(): QueryResult<Post>;
+  maybeSingle(): QueryResult<Post>;
 };
 
 type SupabaseLike = {
   from(table: "posts"): {
-    select(columns: string): SupabaseSelectBuilder<Post[]>;
+    select(columns: string): SupabasePostSelectBuilder;
   };
   rpc(name: "search_posts", args: { q: string }): SupabaseOrderBuilder<Post[]>;
 };
 
-function throwIfError(error: { message: string } | null): void {
+function throwIfError(error: QueryError | null): void {
   if (error) {
     throw new Error(error.message);
+  }
+}
+
+function normalizeRouteSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
   }
 }
 
@@ -64,21 +75,20 @@ export async function listPublishedPosts(client?: SupabaseLike): Promise<Post[]>
 }
 
 export async function getPostBySlug(slug: string, client?: SupabaseLike): Promise<Post | null> {
+  const normalizedSlug = normalizeRouteSlug(slug);
+
   if (!client && useFixtureData()) {
-    return fixturePosts.find((post) => post.slug === slug) ?? null;
+    return fixturePosts.find((post) => post.slug === normalizedSlug) ?? null;
   }
 
   const supabase = resolveClient(client);
   const { data, error } = await supabase
     .from("posts")
     .select("*")
-    .eq("slug", slug)
+    .eq("slug", normalizedSlug)
     .eq("status", "published")
-    .single();
+    .maybeSingle();
 
-  if (error?.message.includes("0 rows")) {
-    return null;
-  }
   throwIfError(error);
   return (data as Post | null) ?? null;
 }

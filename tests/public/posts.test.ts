@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sanitizePostHtml } from "@/lib/html";
-import { searchPosts } from "@/lib/posts";
+import { getPostBySlug, searchPosts } from "@/lib/posts";
 
 describe("sanitizePostHtml", () => {
   it("removes script tags and event handlers while keeping article markup", () => {
@@ -48,3 +48,76 @@ describe("searchPosts", () => {
   });
 });
 
+describe("getPostBySlug", () => {
+  function createPostLookupClient() {
+    const calls: Array<{ column: string; value: unknown }> = [];
+    const post = {
+      id: "post-1",
+      legacy_id: 676,
+      title: "vscode里的codex插件里跑第三方提供商",
+      slug: "676-vscode里的codex插件里跑第三方提供商",
+      content_html: "<p>body</p>",
+      excerpt: null,
+      status: "published" as const,
+      created_at: "2026-06-10T00:00:00.000Z",
+      updated_at: "2026-06-10T00:00:00.000Z",
+      published_at: "2026-06-10T00:00:00.000Z"
+    };
+    const builder = {
+      eq(column: string, value: unknown) {
+        calls.push({ column, value });
+        return builder;
+      },
+      order() {
+        return builder;
+      },
+      limit() {
+        return Promise.resolve({ data: [], error: null });
+      },
+      single() {
+        return builder.maybeSingle();
+      },
+      maybeSingle() {
+        const slug = calls.find((call) => call.column === "slug")?.value;
+        return Promise.resolve({
+          data: slug === post.slug ? post : null,
+          error: null
+        });
+      }
+    };
+
+    return {
+      calls,
+      client: {
+        from() {
+          return {
+            select() {
+              return builder;
+            }
+          };
+        },
+        rpc() {
+          throw new Error("must not search");
+        }
+      }
+    };
+  }
+
+  it("decodes URL-encoded route slugs before querying Supabase", async () => {
+    const { client, calls } = createPostLookupClient();
+
+    const post = await getPostBySlug(
+      "676-vscode%E9%87%8C%E7%9A%84codex%E6%8F%92%E4%BB%B6%E9%87%8C%E8%B7%91%E7%AC%AC%E4%B8%89%E6%96%B9%E6%8F%90%E4%BE%9B%E5%95%86",
+      client
+    );
+
+    expect(post?.slug).toBe("676-vscode里的codex插件里跑第三方提供商");
+    expect(calls).toContainEqual({ column: "slug", value: "676-vscode里的codex插件里跑第三方提供商" });
+  });
+
+  it("returns null when Supabase reports no single post for a slug", async () => {
+    const { client } = createPostLookupClient();
+
+    await expect(getPostBySlug("missing-post", client)).resolves.toBeNull();
+  });
+});
