@@ -31,10 +31,10 @@
 ## Acceptance
 
 - `npm test -- tests/public/posts.test.ts` 通过，覆盖分页参数、排序参数、encoded slug 查询。
-- `npm test -- tests/admin/auth.test.ts` 通过，覆盖未登录删除跳后台、已登录逻辑删除成功、编辑保存成功。
+- `npm test -- tests/admin/auth.test.ts` 通过，覆盖未登录删除跳后台、已登录降为草稿隐藏、编辑保存成功。
 - `npm run e2e` 通过，覆盖首页分页、排序、宽模式、footer、前台编辑入口、详情页动作入口。
 - `npm run build` 通过。
-- 反作弊条款：不能只添加静态按钮；删除必须有服务端认证检查，且只能更新 `posts.status = "deleted"`，不得物理删除数据库行；编辑必须能读取现有文章并提交更新。
+- 反作弊条款：不能只添加静态按钮；删除必须有服务端认证检查，且只能更新 `posts.status = "draft"`，不得物理删除数据库行；编辑必须能读取现有文章并提交更新。
 
 ## Files
 
@@ -48,7 +48,6 @@
 - `src/lib/posts.ts`
 - `src/lib/fixture-data.ts`
 - `supabase/schema.sql`
-- `supabase/v3-logical-delete.sql`
 - `tests/public/posts.test.ts`
 - `tests/admin/auth.test.ts`
 - `tests/e2e/public.spec.ts`
@@ -65,6 +64,6 @@
 
 ## Risks
 
-- 逻辑删除会隐藏公开文章但保留数据库行。v3 不提供恢复界面，恢复可先通过 Supabase 手动把 `status` 改回 `draft` 或 `published`。
+- 逻辑删除会把文章降为草稿，隐藏公开文章但保留数据库行。v3 不提供恢复界面，恢复可先通过 Supabase 手动把 `status` 改回 `published`。
 - 宽模式可能影响移动端。CSS 必须在移动端保持单列和不溢出。
 - 分页和排序要保留查询参数，避免切换模式时丢失当前上下文。

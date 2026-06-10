@@ -7,7 +7,7 @@ create table if not exists public.posts (
   slug text not null unique,
   content_html text not null default '',
   excerpt text,
-  status text not null default 'draft' check (status in ('draft', 'published', 'deleted')),
+  status text not null default 'draft' check (status in ('draft', 'published')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   published_at timestamptz

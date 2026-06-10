@@ -61,7 +61,7 @@ describe("admin post actions", () => {
     });
   });
 
-  it("logically deletes a post by marking its status as deleted", async () => {
+  it("logically deletes a post by demoting it to draft without deleting the row", async () => {
     const calls: Array<{ name: string; args: unknown[] }> = [];
     const builder = {
       update(payload: unknown) {
@@ -91,7 +91,7 @@ describe("admin post actions", () => {
     await deleteAdminPost("post-slug", client);
 
     expect(calls.some((call) => call.name === "delete")).toBe(false);
-    expect(calls).toContainEqual({ name: "update", args: [{ status: "deleted" }] });
+    expect(calls).toContainEqual({ name: "update", args: [{ status: "draft" }] });
     expect(calls).toContainEqual({ name: "eq", args: ["slug", "post-slug"] });
   });
 });

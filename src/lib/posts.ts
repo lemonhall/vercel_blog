@@ -1,7 +1,7 @@
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { fixturePosts, useFixtureData } from "@/lib/fixture-data";
 
-export type PostStatus = "draft" | "published" | "deleted";
+export type PostStatus = "draft" | "published";
 
 export type Post = {
   id: string;

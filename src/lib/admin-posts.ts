@@ -53,6 +53,6 @@ export async function saveAdminPost(input: AdminPostInput, client: AdminPostClie
 }
 
 export async function deleteAdminPost(slug: string, client: AdminPostClient): Promise<void> {
-  const result = await client.from("posts").update({ status: "deleted" }).eq("slug", slug);
+  const result = await client.from("posts").update({ status: "draft" }).eq("slug", slug);
   throwIfError(result.error);
 }
