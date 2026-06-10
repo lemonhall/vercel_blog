@@ -109,7 +109,8 @@ a {
 }
 
 .list-controls,
-.pagination {
+.pagination,
+.tag-cloud {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -118,6 +119,7 @@ a {
 }
 
 .list-controls a,
+.tag-cloud a,
 .pagination a,
 .pagination span {
   border: 1px solid var(--line);
@@ -127,6 +129,26 @@ a {
   background: rgba(251, 247, 238, 0.72);
   text-decoration: none;
   font-size: 14px;
+}
+
+.tag-cloud a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-cloud span {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.tag-cloud .tag-active {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.tag-cloud .tag-active span {
+  color: var(--accent-ink);
 }
 
 .list-controls .control-active {

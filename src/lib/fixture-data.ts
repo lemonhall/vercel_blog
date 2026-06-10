@@ -9,6 +9,7 @@ export const fixturePosts: Post[] = [
     content_html: "<p>这是迁移后的第一篇日记。</p><pre><code class=\"language-ts\">console.log('hello')</code></pre>",
     excerpt: "这是迁移后的第一篇日记。",
     status: "published",
+    content_kind: "post",
     created_at: "2022-05-20T21:20:14.000Z",
     updated_at: "2022-05-21T21:30:38.430Z",
     published_at: "2022-05-20T21:20:14.000Z"
@@ -21,6 +22,7 @@ export const fixturePosts: Post[] = [
     content_html: "<p>牛肉、鹰嘴豆、番茄和香料。</p><img src=\"https://assets.example/beef.jpg\" alt=\"牛肉\" />",
     excerpt: "牛肉、鹰嘴豆、番茄和香料。",
     status: "published",
+    content_kind: "recipe",
     created_at: "2022-05-23T21:09:02.478Z",
     updated_at: "2022-05-23T21:24:19.540Z",
     published_at: "2022-05-23T21:09:02.478Z"
@@ -33,6 +35,7 @@ export const fixturePosts: Post[] = [
     content_html: "<p>这是一篇还没有发布的草稿。</p>",
     excerpt: "这是一篇还没有发布的草稿。",
     status: "draft",
+    content_kind: "post",
     created_at: "2022-05-24T09:00:00.000Z",
     updated_at: "2022-05-24T10:00:00.000Z",
     published_at: null
@@ -47,11 +50,18 @@ export const fixturePosts: Post[] = [
       content_html: `<p>这是第${index + 3}篇分页测试日记。</p>`,
       excerpt: `这是第${index + 3}篇分页测试日记。`,
       status: "published" as const,
+      content_kind: "post" as const,
       created_at: `2022-06-${day}T09:00:00.000Z`,
       updated_at: `2022-06-${day}T09:00:00.000Z`,
       published_at: `2022-06-${day}T09:00:00.000Z`
     };
   })
+];
+
+export const fixturePostTags = [
+  { postId: "fixture-2", name: "牛肉" },
+  { postId: "fixture-2", name: "炖菜" },
+  { postId: "fixture-2", name: "家常菜" }
 ];
 
 export function useFixtureData(): boolean {

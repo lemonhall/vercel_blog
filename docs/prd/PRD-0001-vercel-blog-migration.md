@@ -12,6 +12,7 @@
 - 后台富文本编辑器支持图片上传，上传路径不依赖 Vercel 本地可写文件系统。
 - 公开页面在桌面和移动端有现代、可读、稳定的视觉体验。
 - 公开页面支持基础全文搜索，使用 Supabase Postgres 的 `ILIKE` 查询即可。
+- 食谱类文章可以形成独立频道，并通过 tags 云按菜系、食材、做法等维度浏览。[ECN-0007]
 
 ## Context
 
@@ -207,6 +208,37 @@
 - 给定无结果关键词，搜索页显示空状态。
 - 搜索查询使用参数化 SQL 或 ORM 参数绑定，不拼接用户输入。
 
+### REQ-0001-008: Recipe Channel And Tags
+
+动机：历史博客中有大量食谱，混在普通日记和技术笔记中不利于阅读和复用。食谱需要独立频道，也需要通过 tags 云按菜系、食材、做法、场景等维度浏览。
+
+范围：
+
+- `posts` 必须能区分普通文章和食谱。
+- 食谱文章必须能关联多个 tags。
+- tags 必须支持稳定 slug，方便公开 URL 和未来迁移。
+- 公开页面新增 `/recipes` 食谱频道，只展示已发布食谱。
+- 公开页面新增按 tag 过滤食谱的路径，例如 `/recipes/tags/<tagSlug>`。
+- 食谱频道展示 tags 云，标签数量来自已发布食谱。
+- 后台编辑器支持手工编辑文章类型和 tags。
+- 初始化识别必须由 AI 阅读标题和正文内容后给出“是否食谱”和 tags 建议，程序脚本只能负责导出待识别文本、导入审核后的结构化结果、校验 slug 和引用关系。
+
+非目标：
+
+- v5 不做复杂分类层级、营养数据、菜谱步骤结构化、购物清单或评论系统。
+- v5 不用关键词规则、正则或纯程序化分类来替代 AI 对正文内容的判断。
+- v5 不要求一次性完成所有历史文章的最终人工审校，但导入流程必须支持断点续跑和重复导入。
+
+验收：
+
+- Supabase schema 包含 `posts.content_kind`、`tags`、`post_tags`，并有必要唯一约束和索引。
+- 后台新建/编辑文章时可以选择普通文章或食谱，并保存 tags。
+- `/recipes` 只展示已发布食谱，不展示普通文章或草稿。
+- `/recipes/tags/<tagSlug>` 只展示带该 tag 的已发布食谱。
+- 食谱频道 tags 云显示每个 tag 的使用数量。
+- 初始化导入同一批 AI 标注结果重复运行不会产生重复 tags 或重复关联。
+- AI 标注结果必须以人类可读 JSON/JSONL 文件留档，便于抽查、修正和重跑。
+
 ## Proposed Data Model
 
 ```text
@@ -218,6 +250,7 @@ posts
 - content_html
 - excerpt
 - status
+- content_kind
 - created_at
 - updated_at
 - published_at
@@ -237,6 +270,19 @@ assets
 post_assets
 - post_id
 - asset_id
+
+tags
+- id
+- name
+- slug
+- tag_type
+- sort_order
+- created_at
+
+post_tags
+- post_id
+- tag_id
+- created_at
 ```
 
 ## Constraints

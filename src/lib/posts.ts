@@ -1,7 +1,9 @@
 import { createSupabaseServiceClient } from "@/lib/supabase";
-import { fixturePosts, useFixtureData } from "@/lib/fixture-data";
+import { fixturePostTags, fixturePosts, useFixtureData } from "@/lib/fixture-data";
+import { tagSlugFromName } from "@/lib/tags";
 
 export type PostStatus = "draft" | "published";
+export type ContentKind = "post" | "recipe";
 
 export type Post = {
   id: string;
@@ -11,9 +13,20 @@ export type Post = {
   content_html: string;
   excerpt: string | null;
   status: PostStatus;
+  content_kind: ContentKind;
   created_at: string;
   updated_at: string;
   published_at: string | null;
+};
+
+export type Tag = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type RecipeTag = Tag & {
+  post_count: number;
 };
 
 export type PostSort = "asc" | "desc";
@@ -54,7 +67,7 @@ type SupabaseLike = {
   from(table: "posts"): {
     select(columns: string, options?: { count?: "exact" }): SupabasePostSelectBuilder;
   };
-  rpc(name: "search_posts", args: { q: string }): SupabaseOrderBuilder<Post[]>;
+  rpc(name: string, args?: unknown): unknown;
 };
 
 function throwIfError(error: QueryError | null): void {
@@ -89,6 +102,13 @@ function sortPosts(posts: Post[], sort: PostSort): Post[] {
     const rightDate = right.published_at ?? right.created_at;
     return leftDate.localeCompare(rightDate) * direction;
   });
+}
+
+function recipePosts(): Post[] {
+  return sortPosts(
+    fixturePosts.filter((post) => post.status === "published" && post.content_kind === "recipe"),
+    "desc"
+  );
 }
 
 function resolveClient(client?: SupabaseLike): SupabaseLike {
@@ -133,6 +153,83 @@ export async function listDraftPosts(client?: SupabaseLike): Promise<Post[]> {
 
   throwIfError(error);
   return data ?? [];
+}
+
+export async function listRecipePosts(client?: SupabaseLike): Promise<Post[]> {
+  if (!client && useFixtureData()) {
+    return recipePosts().slice(0, 50);
+  }
+
+  const supabase = resolveClient(client);
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("status", "published")
+    .eq("content_kind", "recipe")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(50);
+
+  throwIfError(error);
+  return data ?? [];
+}
+
+export async function listRecipeTags(client?: SupabaseLike): Promise<RecipeTag[]> {
+  if (!client && useFixtureData()) {
+    const counts = new Map<string, RecipeTag>();
+    const recipeIds = new Set(recipePosts().map((post) => post.id));
+    for (const link of fixturePostTags) {
+      if (!recipeIds.has(link.postId)) {
+        continue;
+      }
+      const slug = tagSlugFromName(link.name);
+      const current = counts.get(slug) ?? { id: slug, name: link.name, slug, post_count: 0 };
+      current.post_count += 1;
+      counts.set(slug, current);
+    }
+    return [...counts.values()].sort((left, right) => right.post_count - left.post_count || left.name.localeCompare(right.name));
+  }
+
+  const supabase = resolveClient(client);
+  const result = (await supabase.rpc("list_recipe_tags")) as { data: RecipeTag[] | null; error: QueryError | null };
+  const { data, error } = await result;
+  throwIfError(error);
+  return (data as RecipeTag[] | null) ?? [];
+}
+
+export async function listRecipePostsByTag(tagSlug: string, client?: SupabaseLike): Promise<Post[]> {
+  const slug = normalizeRouteSlug(tagSlug);
+  if (!client && useFixtureData()) {
+    const taggedPostIds = new Set(
+      fixturePostTags.filter((link) => tagSlugFromName(link.name) === slug).map((link) => link.postId)
+    );
+    return recipePosts().filter((post) => taggedPostIds.has(post.id));
+  }
+
+  const supabase = resolveClient(client);
+  const result = (await supabase.rpc("list_recipe_posts_by_tag", { tag_slug: slug })) as {
+    data: Post[] | null;
+    error: QueryError | null;
+  };
+  const { data, error } = await result;
+  throwIfError(error);
+  return (data as Post[] | null) ?? [];
+}
+
+export async function listTagsForPost(postId: string, client?: SupabaseLike): Promise<Tag[]> {
+  if (!client && useFixtureData()) {
+    return fixturePostTags
+      .filter((link) => link.postId === postId)
+      .map((link) => ({ id: tagSlugFromName(link.name), name: link.name, slug: tagSlugFromName(link.name) }));
+  }
+
+  const supabase = resolveClient(client);
+  const result = (await supabase.rpc("list_tags_for_post", { target_post_id: postId })) as {
+    data: Tag[] | null;
+    error: QueryError | null;
+  };
+  const { data, error } = await result;
+  throwIfError(error);
+  return (data as Tag[] | null) ?? [];
 }
 
 export async function listPublishedPostsPage(
@@ -219,9 +316,8 @@ export async function searchPosts(client: Pick<SupabaseLike, "rpc">, query: stri
     return [];
   }
 
-  const { data, error } = await client
-    .rpc("search_posts", { q })
-    .order("published_at", { ascending: false, nullsFirst: false });
+  const result = client.rpc("search_posts", { q }) as SupabaseOrderBuilder<Post[]>;
+  const { data, error } = await result.order("published_at", { ascending: false, nullsFirst: false });
 
   throwIfError(error);
   return data ?? [];

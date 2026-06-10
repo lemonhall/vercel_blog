@@ -22,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
               <nav className="nav" aria-label="主导航">
                 <Link href="/">文章</Link>
+                <Link href="/recipes">食谱</Link>
                 <Link href="/search">搜索</Link>
                 <Link href="/admin">后台</Link>
               </nav>

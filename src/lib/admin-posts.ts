@@ -1,6 +1,7 @@
 import { excerptFromHtml } from "@/lib/html";
 
 export type AdminPostStatus = "draft" | "published";
+export type AdminContentKind = "post" | "recipe";
 
 export type AdminPostInput = {
   id?: string;
@@ -8,6 +9,8 @@ export type AdminPostInput = {
   slug: string;
   contentHtml: string;
   status: AdminPostStatus;
+  contentKind?: AdminContentKind;
+  tagNames?: string[];
 };
 
 type MutationResult = PromiseLike<{ data: unknown; error: { message: string } | null }>;
@@ -20,6 +23,7 @@ type AdminPostMutationBuilder = {
 
 export type AdminPostClient = {
   from(table: "posts" | string): AdminPostMutationBuilder;
+  rpc?(name: string, args: Record<string, unknown>): MutationResult;
 };
 
 function throwIfError(error: { message: string } | null): void {
@@ -32,6 +36,10 @@ export function normalizeAdminPostStatus(value: string): AdminPostStatus {
   return value === "published" ? "published" : "draft";
 }
 
+export function normalizeAdminContentKind(value: string): AdminContentKind {
+  return value === "recipe" ? "recipe" : "post";
+}
+
 export async function saveAdminPost(input: AdminPostInput, client: AdminPostClient): Promise<string> {
   const now = new Date().toISOString();
   const payload = {
@@ -40,6 +48,7 @@ export async function saveAdminPost(input: AdminPostInput, client: AdminPostClie
     content_html: input.contentHtml,
     excerpt: excerptFromHtml(input.contentHtml),
     status: input.status,
+    content_kind: input.contentKind ?? "post",
     published_at: input.status === "published" ? now : null,
     updated_at: now
   };
@@ -49,6 +58,10 @@ export async function saveAdminPost(input: AdminPostInput, client: AdminPostClie
     : await client.from("posts").insert(payload);
 
   throwIfError(result.error);
+  if (input.tagNames && client.rpc) {
+    const tagResult = await client.rpc("save_post_tags", { post_slug: input.slug, tag_names: input.tagNames });
+    throwIfError(tagResult.error);
+  }
   return input.slug;
 }
 

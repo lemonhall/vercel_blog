@@ -6,6 +6,7 @@ import {
   rewritePostHtml,
   summarizePlan
 } from "@/lib/migration/planner";
+import { exportRecipeCandidatesToJsonl, importRecipeLabelsFromJsonl } from "@/lib/migration/recipe-labels";
 import { createInitialState, markAssetUploaded, pendingAssets } from "@/lib/migration/state";
 import type { LegacyNote, LocalImage } from "@/lib/migration/types";
 
@@ -108,6 +109,85 @@ describe("migration planner", () => {
       postCount: 2,
       missingImageRefCount: 0,
       rewrittenImageRefCount: 2
+    });
+  });
+});
+
+describe("recipe label import", () => {
+  it("exports human-readable JSONL candidates for AI reading without classifying by keywords", () => {
+    const jsonl = exportRecipeCandidatesToJsonl([
+      {
+        id: "post-1",
+        legacy_id: 7,
+        title: "草菇炒牛肉",
+        slug: "7-草菇炒牛肉",
+        content_html: "<p>草菇和牛肉切片后快炒。</p>",
+        excerpt: "草菇和牛肉切片后快炒。",
+        created_at: "2022-05-23T00:00:00.000Z",
+        updated_at: "2022-05-23T00:00:00.000Z"
+      }
+    ]);
+
+    const candidate = JSON.parse(jsonl) as Record<string, unknown>;
+
+    expect(candidate).toMatchObject({
+      post_id: "post-1",
+      legacy_id: 7,
+      title: "草菇炒牛肉",
+      slug: "7-草菇炒牛肉"
+    });
+    expect(candidate.content_text).toBe("草菇和牛肉切片后快炒。");
+    expect(candidate).not.toHaveProperty("content_kind");
+    expect(candidate).not.toHaveProperty("tags");
+  });
+
+  it("imports AI recipe labels idempotently through explicit post update and tag RPC calls", async () => {
+    const calls: Array<{ name: string; args: unknown[] }> = [];
+    const builder = {
+      update(payload: unknown) {
+        calls.push({ name: "update", args: [payload] });
+        return builder;
+      },
+      eq(column: string, value: unknown) {
+        calls.push({ name: "eq", args: [column, value] });
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+    const client = {
+      from(table: string) {
+        calls.push({ name: "from", args: [table] });
+        return builder;
+      },
+      rpc(name: string, args: unknown) {
+        calls.push({ name: "rpc", args: [name, args] });
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+    const jsonl = [
+      JSON.stringify({
+        post_id: "post-1",
+        content_kind: "recipe",
+        tags: ["牛肉", "炖菜", "牛肉"],
+        confidence: 0.92,
+        reason: "正文包含食材和烹饪步骤"
+      }),
+      JSON.stringify({
+        post_id: "post-2",
+        content_kind: "post",
+        tags: [],
+        confidence: 0.4,
+        reason: "只是餐厅记录"
+      })
+    ].join("\n");
+
+    const result = await importRecipeLabelsFromJsonl(jsonl, client);
+
+    expect(result).toEqual({ imported: 1, skipped: 1 });
+    expect(calls).toContainEqual({ name: "update", args: [{ content_kind: "recipe" }] });
+    expect(calls).toContainEqual({ name: "eq", args: ["id", "post-1"] });
+    expect(calls).toContainEqual({
+      name: "rpc",
+      args: ["save_post_tags_for_post", { target_post_id: "post-1", tag_names: ["牛肉", "炖菜"] }]
     });
   });
 });

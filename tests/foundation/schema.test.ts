@@ -8,6 +8,8 @@ describe("Supabase schema", () => {
     expect(schema).toContain("create table if not exists public.posts");
     expect(schema).toContain("create table if not exists public.assets");
     expect(schema).toContain("create table if not exists public.post_assets");
+    expect(schema).toContain("create table if not exists public.tags");
+    expect(schema).toContain("create table if not exists public.post_tags");
   });
 
   it("keeps legacy identifiers and asset lineage", () => {
@@ -22,5 +24,11 @@ describe("Supabase schema", () => {
     expect(schema).toContain("create or replace function public.search_posts");
     expect(schema).toContain("ilike '%' || q || '%'");
   });
-});
 
+  it("defines recipe kind and tag RPCs", () => {
+    expect(schema).toContain("content_kind text not null default 'post'");
+    expect(schema).toContain("create or replace function public.save_post_tags");
+    expect(schema).toContain("create or replace function public.list_recipe_tags");
+    expect(schema).toContain("create or replace function public.list_recipe_posts_by_tag");
+  });
+});

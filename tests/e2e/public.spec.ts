@@ -93,6 +93,31 @@ test("admin can manage drafts and reopen a draft in the editor", async ({ page }
   await expect(page.getByLabel("状态")).toHaveValue("draft");
 });
 
+test("admin can edit recipe tags and readers can browse recipe tag pages", async ({ page }) => {
+  await page.goto("/admin");
+  await page.getByLabel("后台密码").fill("secret");
+  await page.getByRole("button", { name: "登录" }).click();
+
+  await page.goto("/admin?edit=beef-and-chickpeas");
+  await expect(page.getByLabel("文章类型")).toHaveValue("recipe");
+  await expect(page.getByLabel("Tags")).toHaveValue(/牛肉/);
+
+  await page.getByLabel("Tags").fill("牛肉, 炖菜, 家常菜");
+  await page.getByRole("button", { name: "更新" }).click();
+
+  await page.goto("/recipes");
+  await expect(page.getByRole("heading", { name: "食谱" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
+  const beefTag = page.locator(".tag-cloud").getByRole("link", { name: "牛肉 1" });
+  await expect(beefTag).toBeVisible();
+  await expect(beefTag).toHaveAttribute("href", "/recipes/tags/beef");
+
+  await page.goto("/recipes/tags/beef");
+  await expect(page).toHaveURL(/\/recipes\/tags\/beef/);
+  await expect(page.getByRole("heading", { name: "牛肉", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
+});
+
 test("admin editor exposes upgraded controls and mobile friendly toolbar", async ({ page, isMobile }) => {
   await page.goto("/admin");
   await page.getByLabel("后台密码").fill("secret");

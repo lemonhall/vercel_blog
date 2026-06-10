@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { sanitizePostHtml } from "@/lib/html";
-import { getPostBySlug, listDraftPosts, listPublishedPostsPage, searchPosts } from "@/lib/posts";
+import {
+  getPostBySlug,
+  listDraftPosts,
+  listPublishedPostsPage,
+  listRecipePosts,
+  listRecipePostsByTag,
+  listRecipeTags,
+  searchPosts
+} from "@/lib/posts";
 
 describe("sanitizePostHtml", () => {
   it("removes script tags and event handlers while keeping article markup", () => {
@@ -205,6 +213,76 @@ describe("listDraftPosts", () => {
   });
 });
 
+describe("recipe queries", () => {
+  it("uses published recipe filters for recipe lists", async () => {
+    const calls: Array<{ name: string; args: unknown[] }> = [];
+    const builder = {
+      eq(column: string, value: unknown) {
+        calls.push({ name: "eq", args: [column, value] });
+        return builder;
+      },
+      order(column: string, options: unknown) {
+        calls.push({ name: "order", args: [column, options] });
+        return builder;
+      },
+      limit(count: number) {
+        calls.push({ name: "limit", args: [count] });
+        return Promise.resolve({ data: [], error: null });
+      },
+      range() {
+        throw new Error("must not paginate recipes yet");
+      },
+      single() {
+        throw new Error("must not fetch single");
+      },
+      maybeSingle() {
+        throw new Error("must not fetch single");
+      }
+    };
+    const client = {
+      from(table: string) {
+        calls.push({ name: "from", args: [table] });
+        return {
+          select(columns: string) {
+            calls.push({ name: "select", args: [columns] });
+            return builder;
+          }
+        };
+      },
+      rpc() {
+        throw new Error("must not use rpc for base recipe list");
+      }
+    };
+
+    await listRecipePosts(client);
+
+    expect(calls).toContainEqual({ name: "eq", args: ["status", "published"] });
+    expect(calls).toContainEqual({ name: "eq", args: ["content_kind", "recipe"] });
+    expect(calls).toContainEqual({ name: "limit", args: [50] });
+  });
+
+  it("loads recipe tag cloud and tag-filtered recipes through stable RPC contracts", async () => {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const client = {
+      from() {
+        throw new Error("must use rpc");
+      },
+      rpc(name: string, args?: unknown) {
+        calls.push({ name, args });
+        return Promise.resolve({ data: [], error: null });
+      }
+    };
+
+    await listRecipeTags(client);
+    await listRecipePostsByTag("beef", client);
+
+    expect(calls).toEqual([
+      { name: "list_recipe_tags", args: undefined },
+      { name: "list_recipe_posts_by_tag", args: { tag_slug: "beef" } }
+    ]);
+  });
+});
+
 describe("getPostBySlug", () => {
   function createPostLookupClient() {
     const calls: Array<{ column: string; value: unknown }> = [];
@@ -216,6 +294,7 @@ describe("getPostBySlug", () => {
       content_html: "<p>body</p>",
       excerpt: null,
       status: "published" as const,
+      content_kind: "post" as const,
       created_at: "2026-06-10T00:00:00.000Z",
       updated_at: "2026-06-10T00:00:00.000Z",
       published_at: "2026-06-10T00:00:00.000Z"

@@ -8,10 +8,24 @@ create table if not exists public.posts (
   content_html text not null default '',
   excerpt text,
   status text not null default 'draft' check (status in ('draft', 'published')),
+  content_kind text not null default 'post' check (content_kind in ('post', 'recipe')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   published_at timestamptz
 );
+
+alter table public.posts
+  add column if not exists content_kind text not null default 'post';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'posts_content_kind_check'
+  ) then
+    alter table public.posts
+      add constraint posts_content_kind_check check (content_kind in ('post', 'recipe'));
+  end if;
+end $$;
 
 create table if not exists public.assets (
   id uuid primary key default gen_random_uuid(),
@@ -32,14 +46,157 @@ create table if not exists public.post_assets (
   primary key (post_id, asset_id)
 );
 
+create table if not exists public.tags (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  tag_type text not null default 'recipe' check (tag_type in ('recipe')),
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.post_tags (
+  post_id uuid not null references public.posts(id) on delete cascade,
+  tag_id uuid not null references public.tags(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, tag_id)
+);
+
 create index if not exists posts_status_published_at_idx
   on public.posts(status, published_at desc);
+
+create index if not exists posts_recipe_published_at_idx
+  on public.posts(content_kind, status, published_at desc);
 
 create index if not exists posts_legacy_id_idx
   on public.posts(legacy_id);
 
 create index if not exists assets_legacy_path_idx
   on public.assets(legacy_path);
+
+create index if not exists post_tags_tag_id_idx
+  on public.post_tags(tag_id);
+
+create or replace function public.tag_slug_from_name(tag_name text)
+returns text
+language sql
+immutable
+as $$
+  select case trim(tag_name)
+    when '牛肉' then 'beef'
+    when '牛腩' then 'beef-brisket'
+    when '海鲜' then 'seafood'
+    when '鱼' then 'fish'
+    when '虾' then 'shrimp'
+    when '鸡肉' then 'chicken'
+    when '猪肉' then 'pork'
+    when '羊肉' then 'lamb'
+    when '意大利菜' then 'italian'
+    when '法国菜' then 'french'
+    when '中餐' then 'chinese'
+    when '日料' then 'japanese'
+    when '韩餐' then 'korean'
+    when '炖菜' then 'stew'
+    when '烘焙' then 'baking'
+    when '甜点' then 'dessert'
+    when '早餐' then 'breakfast'
+    when '家常菜' then 'home-cooking'
+    when '素菜' then 'vegetarian'
+    else 'tag-' || substr(md5(trim(tag_name)), 1, 12)
+  end;
+$$;
+
+create or replace function public.save_post_tags_for_post(target_post_id uuid, tag_names text[])
+returns void
+language plpgsql
+as $$
+begin
+  delete from public.post_tags where post_id = target_post_id;
+
+  with input_tags as (
+    select distinct trim(value) as name
+    from unnest(coalesce(tag_names, array[]::text[])) as value
+    where length(trim(value)) > 0
+  ),
+  upserted as (
+    insert into public.tags(name, slug, tag_type)
+    select name, public.tag_slug_from_name(name), 'recipe'
+    from input_tags
+    on conflict (slug) do update set name = excluded.name
+    returning id
+  ),
+  existing as (
+    select tags.id
+    from public.tags
+    join input_tags on tags.slug = public.tag_slug_from_name(input_tags.name)
+  ),
+  all_tags as (
+    select id from upserted
+    union
+    select id from existing
+  )
+  insert into public.post_tags(post_id, tag_id)
+  select target_post_id, id from all_tags
+  on conflict do nothing;
+end;
+$$;
+
+create or replace function public.save_post_tags(post_slug text, tag_names text[])
+returns void
+language plpgsql
+as $$
+declare
+  target_post_id uuid;
+begin
+  select id into target_post_id from public.posts where slug = post_slug;
+  if target_post_id is null then
+    raise exception 'post not found for slug %', post_slug;
+  end if;
+  perform public.save_post_tags_for_post(target_post_id, tag_names);
+end;
+$$;
+
+create or replace function public.list_recipe_tags()
+returns table(id uuid, name text, slug text, post_count bigint)
+language sql
+stable
+as $$
+  select tags.id, tags.name, tags.slug, count(*) as post_count
+  from public.tags
+  join public.post_tags on post_tags.tag_id = tags.id
+  join public.posts on posts.id = post_tags.post_id
+  where posts.status = 'published'
+    and posts.content_kind = 'recipe'
+  group by tags.id, tags.name, tags.slug, tags.sort_order
+  order by post_count desc, tags.sort_order asc, tags.name asc;
+$$;
+
+create or replace function public.list_recipe_posts_by_tag(tag_slug text)
+returns setof public.posts
+language sql
+stable
+as $$
+  select posts.*
+  from public.posts
+  join public.post_tags on post_tags.post_id = posts.id
+  join public.tags on tags.id = post_tags.tag_id
+  where posts.status = 'published'
+    and posts.content_kind = 'recipe'
+    and tags.slug = tag_slug
+  order by posts.published_at desc nulls last, posts.created_at desc;
+$$;
+
+create or replace function public.list_tags_for_post(target_post_id uuid)
+returns table(id uuid, name text, slug text)
+language sql
+stable
+as $$
+  select tags.id, tags.name, tags.slug
+  from public.tags
+  join public.post_tags on post_tags.tag_id = tags.id
+  where post_tags.post_id = target_post_id
+  order by tags.sort_order asc, tags.name asc;
+$$;
 
 create or replace function public.search_posts(q text)
 returns setof public.posts

@@ -3,7 +3,14 @@ import { cookies } from "next/headers";
 import { getServerEnv } from "@/lib/env";
 import { verifyAdminSessionToken } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase";
-import { normalizeAdminPostStatus, saveAdminPost, type AdminPostClient } from "@/lib/admin-posts";
+import {
+  normalizeAdminContentKind,
+  normalizeAdminPostStatus,
+  saveAdminPost,
+  type AdminPostClient
+} from "@/lib/admin-posts";
+import { useFixtureData } from "@/lib/fixture-data";
+import { parseTagInput } from "@/lib/tags";
 
 async function requireAdmin(): Promise<boolean> {
   const env = getServerEnv();
@@ -22,6 +29,8 @@ export async function POST(request: Request) {
   const slug = String(form.get("slug") ?? "").trim();
   const contentHtml = String(form.get("content_html") ?? "");
   const status = normalizeAdminPostStatus(String(form.get("status") ?? "draft"));
+  const contentKind = normalizeAdminContentKind(String(form.get("content_kind") ?? "post"));
+  const tagNames = parseTagInput(String(form.get("tags") ?? ""));
 
   if (!title || !slug) {
     return NextResponse.json({ error: "title and slug are required" }, { status: 400 });
@@ -29,7 +38,12 @@ export async function POST(request: Request) {
 
   const supabase = createSupabaseServiceClient();
   try {
-    await saveAdminPost({ id: id || undefined, title, slug, contentHtml, status }, supabase as unknown as AdminPostClient);
+    if (!useFixtureData()) {
+      await saveAdminPost(
+        { id: id || undefined, title, slug, contentHtml, status, contentKind, tagNames },
+        supabase as unknown as AdminPostClient
+      );
+    }
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Save failed" }, { status: 500 });
   }

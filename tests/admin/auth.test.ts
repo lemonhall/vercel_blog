@@ -94,4 +94,53 @@ describe("admin post actions", () => {
     expect(calls).toContainEqual({ name: "update", args: [{ status: "draft" }] });
     expect(calls).toContainEqual({ name: "eq", args: ["slug", "post-slug"] });
   });
+
+  it("saves recipe kind and tag names through the post tag RPC", async () => {
+    const calls: Array<{ name: string; args: unknown[] }> = [];
+    const builder = {
+      update(payload: unknown) {
+        calls.push({ name: "update", args: [payload] });
+        return builder;
+      },
+      insert(payload: unknown) {
+        calls.push({ name: "insert", args: [payload] });
+        return Promise.resolve({ data: null, error: null });
+      },
+      eq(column: string, value: unknown) {
+        calls.push({ name: "eq", args: [column, value] });
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+    const client = {
+      from(table: string) {
+        calls.push({ name: "from", args: [table] });
+        return builder;
+      },
+      rpc(name: string, args: unknown) {
+        calls.push({ name: "rpc", args: [name, args] });
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+
+    await saveAdminPost(
+      {
+        id: "post-1",
+        title: "番茄炖牛肉",
+        slug: "tomato-beef",
+        contentHtml: "<p>牛肉和番茄慢炖。</p>",
+        status: "published",
+        contentKind: "recipe",
+        tagNames: ["牛肉", "炖菜", "法国菜"]
+      },
+      client
+    );
+
+    expect(calls.find((call) => call.name === "update")?.args[0]).toMatchObject({
+      content_kind: "recipe"
+    });
+    expect(calls).toContainEqual({
+      name: "rpc",
+      args: ["save_post_tags", { post_slug: "tomato-beef", tag_names: ["牛肉", "炖菜", "法国菜"] }]
+    });
+  });
 });

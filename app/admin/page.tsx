@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { getServerEnv } from "@/lib/env";
 import { verifyAdminSessionToken } from "@/lib/auth";
 import { RichTextEditor } from "@/components/RichTextEditor";
-import { getPostForAdminBySlug, listDraftPosts, type Post } from "@/lib/posts";
+import { getPostForAdminBySlug, listDraftPosts, listTagsForPost, type Post } from "@/lib/posts";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +59,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     env.adminPassword
   );
   const editingPost = isAuthed && params?.edit ? await getPostForAdminBySlug(params.edit) : null;
+  const editingTags = editingPost ? await listTagsForPost(editingPost.id) : [];
   const drafts = isAuthed ? await listDraftPosts() : [];
   const nextPath = params?.next ?? nextPathForEdit(params?.edit);
 
@@ -75,6 +76,20 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <option value="draft">草稿</option>
               <option value="published">发布</option>
             </select>
+            <select
+              name="content_kind"
+              defaultValue={editingPost?.content_kind === "recipe" ? "recipe" : "post"}
+              aria-label="文章类型"
+            >
+              <option value="post">普通文章</option>
+              <option value="recipe">食谱</option>
+            </select>
+            <input
+              name="tags"
+              placeholder="Tags，用逗号分隔"
+              aria-label="Tags"
+              defaultValue={editingTags.map((tag) => tag.name).join(", ")}
+            />
             <RichTextEditor name="content_html" initialHtml={editingPost?.content_html ?? ""} />
             <button className="button-link" type="submit">
               {editingPost ? "更新" : "保存"}
