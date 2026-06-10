@@ -28,6 +28,33 @@ test("public reader can browse and search posts", async ({ page }) => {
   await expect(page.getByRole("button", { name: "删除 鹰嘴豆炖牛肉" })).toHaveCount(0);
 });
 
+test("mobile public list wraps long titles and excerpts without horizontal scrolling", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.locator(".post-item").first().evaluate((item) => {
+    const title = item.querySelector("h2 a");
+    const excerpt = item.querySelector(".post-excerpt");
+    if (title) {
+      title.textContent = "VeryLongUnbrokenTitleForMobileChromeOverflowRegression012345678901234567890123456789";
+    }
+    if (excerpt) {
+      excerpt.textContent = "https://example.com/very/long/path/that/should/not/create/horizontal/scrolling/on/ios/chrome";
+    }
+  });
+
+  const metrics = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    documentScroll: document.documentElement.scrollWidth,
+    bodyScroll: document.body.scrollWidth,
+    firstPostWidth: document.querySelector(".post-item")?.getBoundingClientRect().width ?? 0
+  }));
+
+  expect(metrics.documentScroll).toBeLessThanOrEqual(metrics.viewport + 1);
+  expect(metrics.bodyScroll).toBeLessThanOrEqual(metrics.viewport + 1);
+  expect(metrics.firstPostWidth).toBeLessThanOrEqual(metrics.viewport);
+});
+
 test("admin login accepts configured password", async ({ page }) => {
   await page.goto("/admin");
   await page.getByLabel("后台密码").fill("secret");
