@@ -21,7 +21,7 @@
 | M2 Schema 与数据层 | `content_kind`、`tags`、`post_tags`；查询和保存 API | schema 有约束和索引；保存文章可写类型与 tags；重复保存不产生重复关联 | `npm test -- tests/public/posts.test.ts tests/admin/auth.test.ts tests/foundation/schema.test.ts` 20 passed | done |
 | M3 后台编辑 | 管理员可编辑文章类型和 tags | 编辑页有类型选择、tags 输入；保存后再次编辑能回显 | `npm run e2e -- -g "recipe tags\|recipe tag pages"` 2 passed | done |
 | M4 公开食谱频道 | `/recipes`、`/recipes/tags/<tag>`、tags 云 | 频道只显示已发布食谱；按 tag 过滤正确；普通文章和草稿不泄露 | `npm run e2e` 14 passed | done |
-| M5 AI 初始化标注链路 | 导出待识别内容、AI JSONL 标注、导入标注结果 | 导出文件可读；导入幂等；支持断点续跑；不使用关键词规则替代 AI 判断 | `npm test -- tests/migration/migration.test.ts` 7 passed | done |
+| M5 AI 初始化标注链路 | 导出待识别内容、AI JSONL 标注、导入标注结果 | 导出文件可读；导入幂等；支持断点续跑；不使用关键词规则替代 AI 判断；真实生产库已完成首轮标注导入 | `npm test -- tests/migration/migration.test.ts` 7 passed；生产验证 `recipePosts=287`、`tags=57`、`post_tags=945` | done |
 | M6 发布验证 | 全量验证与回顾 | 单测、类型、构建、E2E 全绿；提交并推送 | `npm test` 32 passed；`npx tsc --noEmit` 通过；`npm run build` 通过；`npm run e2e` 14 passed | done |
 
 ## 计划索引
@@ -41,4 +41,5 @@
 ## 差异列表
 
 - v5 代码链路已实现：schema、后台编辑、公开食谱频道、tag 云、AI JSONL 导出/导入均有自动化测试覆盖。
-- 真实生产库的 300-400 篇食谱尚未执行 AI 批量标注导入。原因：生产 Supabase 需要先应用 `supabase/schema.sql` 中的新增列、表与 RPC；应用后再用导出 JSONL → AI 分批阅读 → 导入 JSONL 的链路执行，不能在 schema 未更新时假装完成真实数据初始化。
+- 真实生产库已完成首轮 AI 初标导入：从 669 篇当前文章中标出 287 篇食谱，写入 `posts.content_kind='recipe'`，生成 57 个 tags 与 945 条 `post_tags` 关联。线上 `/recipes` 与 `/recipes/tags/beef` 返回 HTTP 200。
+- 仍需人工抽查的不是链路缺口，而是内容质量工作：后续可以在后台逐篇修正 tags，或修正 JSONL 后重跑导入。

@@ -95,6 +95,15 @@ AI 输出文件：`data/ai-tagging/recipe-labels.jsonl`
 - 每行必须保留 `reason`，方便抽查为什么这么标。
 - 低置信度条目允许进入 `needs_review` 报告，不直接导入。
 
+## 生产导入记录
+
+- 时间：2026-06-11
+- 输入：`.tmp/recipe-candidates.jsonl`，当前生产 Supabase 中 669 篇文章。
+- 标注：`.tmp/recipe-labels.jsonl`，首轮 AI 初标 287 篇食谱。
+- 导入：`.tmp/import-recipe-labels.mjs` 顺序写入 Supabase，结果 `imported=287`、`skipped=0`。
+- 验证：`.tmp/verify-recipe-import.mjs` 读取生产库，结果 `recipePosts=287`、`tags=57`、`post_tags=945`；`list_recipe_tags` 返回 tags 云；线上 `/recipes` 与 `/recipes/tags/beef` 返回 HTTP 200。
+- 断点续跑：同一 JSONL 可重复导入，`post_tags` 依赖 `(post_id, tag_id)` 主键和 `save_post_tags_for_post` RPC 清理后重写，重复运行不会制造重复关联。
+
 ## Risks
 
 - 历史正文 HTML 可能很长，单批 AI 标注要限制 token 和批次大小。
