@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listRecipePosts, listRecipeTags } from "@/lib/posts";
+import { listRecipePosts, listRecipeTags, type Post, type RecipeTag } from "@/lib/posts";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +11,22 @@ function formatDate(value: string | null): string {
 }
 
 export default async function RecipesPage() {
-  const [posts, tags] = await Promise.all([listRecipePosts(), listRecipeTags()]);
+  let posts: Post[] = [];
+  let tags: RecipeTag[] = [];
+  let setupError = false;
+  try {
+    [posts, tags] = await Promise.all([listRecipePosts(), listRecipeTags()]);
+  } catch {
+    setupError = true;
+  }
 
   return (
     <main className="page">
       <h1 className="page-title">食谱</h1>
       <p className="page-subtitle">按菜系、食材和做法整理的厨房笔记。</p>
+      {setupError ? (
+        <div className="empty-state">食谱数据库结构尚未应用。请先在 Supabase 执行 v5 schema。</div>
+      ) : null}
       {tags.length > 0 ? (
         <nav className="tag-cloud" aria-label="食谱 Tags">
           {tags.map((tag) => (

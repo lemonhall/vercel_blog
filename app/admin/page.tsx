@@ -49,6 +49,17 @@ function DraftManagement({ drafts }: { drafts: Post[] }) {
   );
 }
 
+async function safeListTagsForPost(post: Post | null) {
+  if (!post) {
+    return [];
+  }
+  try {
+    return await listTagsForPost(post.id);
+  } catch {
+    return [];
+  }
+}
+
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const params = await searchParams;
   const env = getServerEnv();
@@ -59,7 +70,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     env.adminPassword
   );
   const editingPost = isAuthed && params?.edit ? await getPostForAdminBySlug(params.edit) : null;
-  const editingTags = editingPost ? await listTagsForPost(editingPost.id) : [];
+  const editingTags = await safeListTagsForPost(editingPost);
   const drafts = isAuthed ? await listDraftPosts() : [];
   const nextPath = params?.next ?? nextPathForEdit(params?.edit);
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { listRecipePostsByTag, listRecipeTags } from "@/lib/posts";
+import { listRecipePostsByTag, listRecipeTags, type Post, type RecipeTag } from "@/lib/posts";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,22 @@ function formatDate(value: string | null): string {
 
 export default async function RecipeTagPage({ params }: RecipeTagPageProps) {
   const { tag } = await params;
-  const [tags, posts] = await Promise.all([listRecipeTags(), listRecipePostsByTag(tag)]);
+  let tags: RecipeTag[] = [];
+  let posts: Post[] = [];
+  let setupError = false;
+  try {
+    [tags, posts] = await Promise.all([listRecipeTags(), listRecipePostsByTag(tag)]);
+  } catch {
+    setupError = true;
+  }
+  if (setupError) {
+    return (
+      <main className="page">
+        <h1 className="page-title">食谱标签</h1>
+        <div className="empty-state">食谱数据库结构尚未应用。请先在 Supabase 执行 v5 schema。</div>
+      </main>
+    );
+  }
   const activeTag = tags.find((item) => item.slug === decodeURIComponent(tag));
   if (!activeTag) {
     notFound();
