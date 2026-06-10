@@ -24,10 +24,24 @@ export const fixturePosts: Post[] = [
     created_at: "2022-05-23T21:09:02.478Z",
     updated_at: "2022-05-23T21:24:19.540Z",
     published_at: "2022-05-23T21:09:02.478Z"
-  }
+  },
+  ...Array.from({ length: 12 }, (_, index) => {
+    const day = String(index + 1).padStart(2, "0");
+    return {
+      id: `fixture-extra-${index + 1}`,
+      legacy_id: 100 + index,
+      title: `第${index + 3}篇日记`,
+      slug: `note-${index + 3}`,
+      content_html: `<p>这是第${index + 3}篇分页测试日记。</p>`,
+      excerpt: `这是第${index + 3}篇分页测试日记。`,
+      status: "published" as const,
+      created_at: `2022-06-${day}T09:00:00.000Z`,
+      updated_at: `2022-06-${day}T09:00:00.000Z`,
+      published_at: `2022-06-${day}T09:00:00.000Z`
+    };
+  })
 ];
 
 export function useFixtureData(): boolean {
   return process.env.USE_FIXTURE_DATA === "1";
 }
-

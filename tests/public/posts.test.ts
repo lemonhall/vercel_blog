@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sanitizePostHtml } from "@/lib/html";
-import { getPostBySlug, searchPosts } from "@/lib/posts";
+import { getPostBySlug, listPublishedPostsPage, searchPosts } from "@/lib/posts";
 
 describe("sanitizePostHtml", () => {
   it("removes script tags and event handlers while keeping article markup", () => {
@@ -48,6 +48,97 @@ describe("searchPosts", () => {
   });
 });
 
+describe("listPublishedPostsPage", () => {
+  it("uses page and ascending sort options for Supabase pagination", async () => {
+    const calls: Array<{ name: string; args: unknown[] }> = [];
+    const builder = {
+      eq(column: string, value: unknown) {
+        calls.push({ name: "eq", args: [column, value] });
+        return builder;
+      },
+      order(column: string, options: unknown) {
+        calls.push({ name: "order", args: [column, options] });
+        return builder;
+      },
+      range(from: number, to: number) {
+        calls.push({ name: "range", args: [from, to] });
+        return Promise.resolve({ data: [], error: null, count: 42 });
+      },
+      limit() {
+        throw new Error("must use range");
+      },
+      single() {
+        throw new Error("must not fetch single");
+      },
+      maybeSingle() {
+        throw new Error("must not fetch single");
+      }
+    };
+    const client = {
+      from(table: string) {
+        calls.push({ name: "from", args: [table] });
+        return {
+          select(columns: string, options: unknown) {
+            calls.push({ name: "select", args: [columns, options] });
+            return builder;
+          }
+        };
+      },
+      rpc() {
+        throw new Error("must not search");
+      }
+    };
+
+    const result = await listPublishedPostsPage({ page: 2, pageSize: 10, sort: "asc" }, client);
+
+    expect(result).toMatchObject({ page: 2, pageSize: 10, pageCount: 5, total: 42, sort: "asc" });
+    expect(calls).toContainEqual({ name: "select", args: ["*", { count: "exact" }] });
+    expect(calls).toContainEqual({ name: "order", args: ["published_at", { ascending: true, nullsFirst: false }] });
+    expect(calls).toContainEqual({ name: "range", args: [10, 19] });
+  });
+
+  it("normalizes invalid page and sort options", async () => {
+    const builder = {
+      eq() {
+        return builder;
+      },
+      order(_column: string, options: unknown) {
+        expect(options).toEqual({ ascending: false, nullsFirst: false });
+        return builder;
+      },
+      range(from: number, to: number) {
+        expect([from, to]).toEqual([0, 9]);
+        return Promise.resolve({ data: [], error: null, count: 0 });
+      },
+      limit() {
+        throw new Error("must use range");
+      },
+      single() {
+        throw new Error("must not fetch single");
+      },
+      maybeSingle() {
+        throw new Error("must not fetch single");
+      }
+    };
+    const client = {
+      from() {
+        return {
+          select() {
+            return builder;
+          }
+        };
+      },
+      rpc() {
+        throw new Error("must not search");
+      }
+    };
+
+    const result = await listPublishedPostsPage({ page: -10, pageSize: 10, sort: "oldest" }, client);
+
+    expect(result).toMatchObject({ page: 1, pageCount: 1, sort: "desc" });
+  });
+});
+
 describe("getPostBySlug", () => {
   function createPostLookupClient() {
     const calls: Array<{ column: string; value: unknown }> = [];
@@ -72,6 +163,9 @@ describe("getPostBySlug", () => {
         return builder;
       },
       limit() {
+        return Promise.resolve({ data: [], error: null });
+      },
+      range() {
         return Promise.resolve({ data: [], error: null });
       },
       single() {

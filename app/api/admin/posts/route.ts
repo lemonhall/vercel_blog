@@ -3,11 +3,7 @@ import { cookies } from "next/headers";
 import { getServerEnv } from "@/lib/env";
 import { verifyAdminSessionToken } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase";
-import { excerptFromHtml } from "@/lib/html";
-
-function normalizeStatus(value: string): "draft" | "published" {
-  return value === "published" ? "published" : "draft";
-}
+import { normalizeAdminPostStatus, saveAdminPost, type AdminPostClient } from "@/lib/admin-posts";
 
 async function requireAdmin(): Promise<boolean> {
   const env = getServerEnv();
@@ -21,30 +17,22 @@ export async function POST(request: Request) {
   }
 
   const form = await request.formData();
+  const id = String(form.get("id") ?? "").trim();
   const title = String(form.get("title") ?? "").trim();
   const slug = String(form.get("slug") ?? "").trim();
   const contentHtml = String(form.get("content_html") ?? "");
-  const status = normalizeStatus(String(form.get("status") ?? "draft"));
+  const status = normalizeAdminPostStatus(String(form.get("status") ?? "draft"));
 
   if (!title || !slug) {
     return NextResponse.json({ error: "title and slug are required" }, { status: 400 });
   }
 
-  const now = new Date().toISOString();
   const supabase = createSupabaseServiceClient();
-  const { error } = await supabase.from("posts").insert({
-    title,
-    slug,
-    content_html: contentHtml,
-    excerpt: excerptFromHtml(contentHtml),
-    status,
-    published_at: status === "published" ? now : null
-  });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    await saveAdminPost({ id: id || undefined, title, slug, contentHtml, status }, supabase as unknown as AdminPostClient);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Save failed" }, { status: 500 });
   }
 
   return NextResponse.redirect(new URL(`/posts/${slug}`, request.url), 303);
 }
-
