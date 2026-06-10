@@ -64,6 +64,7 @@ type SupabaseOrderBuilder<T> = {
 
 type SupabasePostSelectBuilder = {
   eq(column: string, value: unknown): SupabasePostSelectBuilder;
+  or?(filter: string): SupabasePostSelectBuilder;
   order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): SupabasePostSelectBuilder;
   limit(count: number): QueryResult<Post[]>;
   range(from: number, to: number): QueryResult<Post[]>;
@@ -308,6 +309,72 @@ export async function listRecipePostsByTagPage(
     pageSize,
     pageCount: Math.max(1, Math.ceil(taggedPosts.length / pageSize)),
     total: taggedPosts.length,
+    sort
+  };
+}
+
+export async function searchRecipePostsPage(
+  query: string,
+  options: PostPageOptions = {},
+  client?: SupabaseLike
+): Promise<RecipePostPageResult> {
+  const q = query.trim();
+  if (!q) {
+    return listRecipePostsPage(options, client);
+  }
+
+  const page = normalizePositiveInteger(options.page, 1);
+  const pageSize = normalizePositiveInteger(options.pageSize, 10);
+  const sort = normalizeSort(options.sort);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  if (!client && useFixtureData()) {
+    const recipes = sortPosts(
+      fixturePosts.filter(
+        (post) =>
+          post.status === "published" &&
+          post.content_kind === "recipe" &&
+          (post.title.includes(q) || post.content_html.includes(q) || (post.excerpt?.includes(q) ?? false))
+      ),
+      sort
+    );
+    const pagePosts = recipes.slice(from, to + 1);
+    return {
+      posts: await attachTagsToPosts(pagePosts),
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(recipes.length / pageSize)),
+      total: recipes.length,
+      sort
+    };
+  }
+
+  const supabase = resolveClient(client);
+  const builder = supabase
+    .from("posts")
+    .select("*", { count: "exact" })
+    .eq("status", "published")
+    .eq("content_kind", "recipe");
+
+  if (!builder.or) {
+    throw new Error("recipe search requires a PostgREST OR filter");
+  }
+
+  const { data, error, count } = await builder
+    .or(`title.ilike.%${q}%,content_html.ilike.%${q}%`)
+    .order("published_at", { ascending: sort === "asc", nullsFirst: false })
+    .range(from, to);
+
+  throwIfError(error);
+  const posts = data ?? [];
+  const total = count ?? posts.length;
+  return {
+    posts: await attachTagsToPosts(posts, client),
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    total,
     sort
   };
 }

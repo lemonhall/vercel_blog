@@ -113,6 +113,14 @@ test("admin can edit recipe tags and readers can browse recipe tag pages", async
   await expect(recipeCard.locator(".post-tags")).toContainText("炖菜");
   await expect(page.getByRole("navigation", { name: "分页" })).toContainText("第 1 / 2 页");
   await expect(page.getByRole("link", { name: "下一页" })).toBeVisible();
+  await page.getByLabel("食谱搜索关键词").fill("鹰嘴豆");
+  await page.getByRole("button", { name: "搜索食谱" }).click();
+  await expect(page).toHaveURL(/\/recipes\?q=/);
+  await expect(page.getByRole("link", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "测试食谱 1" })).toHaveCount(0);
+  await page.getByLabel("食谱搜索关键词").fill("第14篇日记");
+  await page.getByRole("button", { name: "搜索食谱" }).click();
+  await expect(page.getByText("没有找到匹配食谱。")).toBeVisible();
   const beefTag = page.locator(".tag-cloud").getByRole("link", { name: "牛肉 1" });
   await expect(beefTag).toBeVisible();
   await expect(beefTag).toHaveAttribute("href", "/recipes/tags/beef");

@@ -1,10 +1,17 @@
 import Link from "next/link";
-import { listRecipePostsPage, listRecipeTags, type PostSort, type PostWithTags, type RecipeTag } from "@/lib/posts";
+import {
+  listRecipePostsPage,
+  listRecipeTags,
+  searchRecipePostsPage,
+  type PostSort,
+  type PostWithTags,
+  type RecipeTag
+} from "@/lib/posts";
 
 export const dynamic = "force-dynamic";
 
 type RecipesPageProps = {
-  searchParams?: Promise<{ page?: string }>;
+  searchParams?: Promise<{ page?: string; q?: string }>;
 };
 
 function formatDate(value: string | null): string {
@@ -19,11 +26,17 @@ function parsePage(value: string | undefined): number {
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
 
-function hrefFor(page?: number): string {
-  if (!page || page <= 1) {
-    return "/recipes";
+function hrefFor(input: { page?: number; query: string }): string {
+  const params = new URLSearchParams();
+  const q = input.query.trim();
+  if (q) {
+    params.set("q", q);
   }
-  return `/recipes?page=${page}`;
+  if (input.page && input.page > 1) {
+    params.set("page", String(input.page));
+  }
+  const value = params.toString();
+  return value ? `/recipes?${value}` : "/recipes";
 }
 
 function RecipePostTags({ post }: { post: PostWithTags }) {
@@ -44,11 +57,15 @@ function RecipePostTags({ post }: { post: PostWithTags }) {
 export default async function RecipesPage({ searchParams }: RecipesPageProps) {
   const params = await searchParams;
   const currentPage = parsePage(params?.page);
+  const query = params?.q ?? "";
   let result = { posts: [] as PostWithTags[], page: currentPage, pageSize: 10, pageCount: 1, total: 0, sort: "desc" as PostSort };
   let tags: RecipeTag[] = [];
   let setupError = false;
   try {
-    [result, tags] = await Promise.all([listRecipePostsPage({ page: currentPage, pageSize: 10 }), listRecipeTags()]);
+    const postsPromise = query.trim()
+      ? searchRecipePostsPage(query, { page: currentPage, pageSize: 10 })
+      : listRecipePostsPage({ page: currentPage, pageSize: 10 });
+    [result, tags] = await Promise.all([postsPromise, listRecipeTags()]);
   } catch {
     setupError = true;
   }
@@ -57,6 +74,10 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
     <main className="page">
       <h1 className="page-title">食谱</h1>
       <p className="page-subtitle">按菜系、食材和做法整理的厨房笔记。</p>
+      <form className="search-form" action="/recipes">
+        <input name="q" defaultValue={query} placeholder="只搜索食谱标题和正文" aria-label="食谱搜索关键词" />
+        <button type="submit">搜索食谱</button>
+      </form>
       {setupError ? (
         <div className="empty-state">食谱数据库结构尚未应用。请先在 Supabase 执行 v5 schema。</div>
       ) : null}
@@ -71,7 +92,7 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
         </nav>
       ) : null}
       {result.posts.length === 0 ? (
-        <div className="empty-state">还没有已发布食谱。</div>
+        <div className="empty-state">{query.trim() ? "没有找到匹配食谱。" : "还没有已发布食谱。"}</div>
       ) : (
         <div className="post-list">
           {result.posts.map((post) => (
@@ -88,11 +109,11 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
       )}
       {!setupError ? (
         <nav className="pagination" aria-label="分页">
-          {result.page > 1 ? <a href={hrefFor(result.page - 1)}>上一页</a> : <span>上一页</span>}
+          {result.page > 1 ? <a href={hrefFor({ page: result.page - 1, query })}>上一页</a> : <span>上一页</span>}
           <span>
             第 {result.page} / {result.pageCount} 页
           </span>
-          {result.page < result.pageCount ? <a href={hrefFor(result.page + 1)}>下一页</a> : <span>下一页</span>}
+          {result.page < result.pageCount ? <a href={hrefFor({ page: result.page + 1, query })}>下一页</a> : <span>下一页</span>}
         </nav>
       ) : null}
     </main>
