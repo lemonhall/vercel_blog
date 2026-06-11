@@ -7,9 +7,8 @@ playwright-report/
 test-results/
 .env
 .env.*
-!.env.example
 refs/
 .tmp/
 supabase/.temp/
-
-.vercel
+migration_state/
+tsconfig.tsbuildinfo
