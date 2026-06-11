@@ -32,7 +32,7 @@ SUPABASE_PROD_SECRET_KEY
 | `SUPABASE_PROD_PUBLISHABLE_KEY` | Supabase | 生产环境必填 | 生产库 publishable key |
 | `SUPABASE_PROD_SECRET_KEY` | Supabase | 生产环境必填 | 生产库服务端 secret key |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob | 是 | 服务端上传图片到 Vercel Blob |
-| `AI_GATEWAY_API_KEY` | Vercel AI Gateway | 在线估算必填 | 服务端调用 `openai/gpt-5.5` 估算食谱卡路里 |
+| `AI_GATEWAY_API_KEY` | Vercel AI Gateway | 在线估算必填 | 服务端调用 `openai/gpt-5.2` 估算食谱卡路里 |
 | `ADMIN_PASSWORD` | 自己设置 | 是 | 单人后台登录密码 |
 | `AUTH_COOKIE_SECRET` | 自己生成 | 是 | 后台登录 cookie 的签名密钥 |
 | `USE_FIXTURE_DATA` | 本地/E2E 测试 | 否 | 使用内置测试文章，不连真实 Supabase |
@@ -177,7 +177,7 @@ AI_GATEWAY_API_KEY=<Vercel AI Gateway API key>
 约束：
 
 - 只在服务端使用，不要加 `NEXT_PUBLIC_` 前缀。
-- 默认模型固定为普通 `openai/gpt-5.5`，不使用 `openai/gpt-5.5-pro`。
+- 默认模型固定为普通 `openai/gpt-5.2`，不使用 `openai/gpt-5.2-pro`。
 - 后台只有在文章类型为食谱并主动选择估算时才调用。
 - 存量食谱批量估算使用本地 JSONL 导入，不消耗 Vercel AI Gateway tokens。
 

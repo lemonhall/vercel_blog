@@ -186,7 +186,7 @@ describe("admin post actions", () => {
     );
   });
 
-  it("estimates recipe calories with GPT-5.5 and persists ingredient details", async () => {
+  it("estimates recipe calories with GPT-5.2 and persists ingredient details", async () => {
     const calls: Array<{ name: string; args: unknown }> = [];
     const client = {
       from() {
@@ -199,7 +199,7 @@ describe("admin post actions", () => {
     };
     const estimator = async (input: { title: string; model: string }) => {
       expect(input.title).toBe("番茄炖牛肉");
-      expect(input.model).toBe("openai/gpt-5.5");
+      expect(input.model).toBe("openai/gpt-5.2");
       return {
         servings: 4,
         caloriesTotalKcal: 1800,
@@ -208,7 +208,7 @@ describe("admin post actions", () => {
         confidence: 0.72,
         needsReview: false,
         summary: "每份约 450 kcal。",
-        model: "openai/gpt-5.5",
+        model: "openai/gpt-5.2",
         promptVersion: "recipe-calorie-v1",
         sourceHash: "hash-1",
         rawEstimateJson: { ok: true }
@@ -241,7 +241,7 @@ describe("admin post actions", () => {
           confidence: 0.72,
           needs_review: false,
           summary: "每份约 450 kcal。",
-          model: "openai/gpt-5.5",
+          model: "openai/gpt-5.2",
           prompt_version: "recipe-calorie-v1",
           source_hash: "hash-1",
           raw_estimate_json: { ok: true }
@@ -282,7 +282,7 @@ describe("admin post actions", () => {
     );
 
     expect(requestBody).toMatchObject({
-      model: "openai/gpt-5.5",
+      model: "openai/gpt-5.2",
       stream: false
     });
     expect(requestBody).not.toHaveProperty("response_format");
@@ -310,7 +310,7 @@ describe("admin post actions", () => {
         confidence: 72,
         explanation: "每份约 450 kcal。"
       },
-      { model: "openai/gpt-5.5", sourceHash: "hash-1" }
+      { model: "openai/gpt-5.2", sourceHash: "hash-1" }
     );
 
     expect(estimate).toMatchObject({
@@ -327,7 +327,7 @@ describe("admin post actions", () => {
 
   it("reports invalid model JSON keys when recipe calorie validation fails", () => {
     expect(() =>
-      validateRecipeNutritionJson({ total: 123, food: [] }, { model: "openai/gpt-5.5", sourceHash: "hash-1" })
+      validateRecipeNutritionJson({ total: 123, food: [] }, { model: "openai/gpt-5.2", sourceHash: "hash-1" })
     ).toThrow("keys=total,food");
   });
 
@@ -342,7 +342,7 @@ describe("admin post actions", () => {
         needs_review: true,
         summary: ""
       },
-      { model: "openai/gpt-5.5", sourceHash: "hash-1" }
+      { model: "openai/gpt-5.2", sourceHash: "hash-1" }
     );
 
     expect(estimate).toMatchObject({

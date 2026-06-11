@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { excerptFromHtml } from "@/lib/html";
 
-export const RECIPE_CALORIE_MODEL = "openai/gpt-5.5";
+export const RECIPE_CALORIE_MODEL = "openai/gpt-5.2";
 export const RECIPE_CALORIE_PROMPT_VERSION = "recipe-calorie-v1";
 
 export type IngredientCalorieEstimate = {

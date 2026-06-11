@@ -2,7 +2,7 @@
 
 ## 愿景
 
-关联 `PRD-0001`、`ECN-0008` 和 `REQ-0001-009`。v6 的目标是在后台新增或更新食谱时，通过 Vercel AI Gateway 调用普通 `openai/gpt-5.5` 估算卡路里，并把结果持久化到 Supabase；存量食谱先用本地 JSONL 批量估算导入，不消耗 Vercel tokens。公开食谱列表只展示最终卡路里值，单篇详情页展示食材明细和加总依据。
+关联 `PRD-0001`、`ECN-0008` 和 `REQ-0001-009`。v6 的目标是在后台新增或更新食谱时，通过 Vercel AI Gateway 调用普通 `openai/gpt-5.2` 估算卡路里，并把结果持久化到 Supabase；存量食谱先用本地 JSONL 批量估算导入，不消耗 Vercel tokens。公开食谱列表只展示最终卡路里值，单篇详情页展示食材明细和加总依据。
 
 ## 当前版本判断
 
@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | M1 文档与追溯 | ECN-0008、PRD-0001、v6-index、v6 执行计划 | 新 Req ID 存在；AI Gateway、模型、鉴权、持久化、失败边界清晰；无乱码 | `git diff --text`；乱码扫描无命中 | done |
 | M2 Schema 与配置 | `recipe_nutrition_estimates`、`AI_GATEWAY_API_KEY` 环境变量 | schema 有 `post_id` 唯一当前估算约束和食材明细 JSON 字段；env 文档和 `.env.example` 有变量；secret 不进前端 | `npm test -- tests/foundation/schema.test.ts tests/foundation/env.test.ts` | done |
-| M3 AI 服务层 | Vercel AI Gateway 调用、prompt、结构化 JSON 校验 | 使用 `AI_GATEWAY_API_KEY` 和 `openai/gpt-5.5`；非法 JSON/缺字段失败；普通文章不调用 AI；返回食材明细数组 | `npm test -- tests/admin/auth.test.ts` | done |
+| M3 AI 服务层 | Vercel AI Gateway 调用、prompt、结构化 JSON 校验 | 使用 `AI_GATEWAY_API_KEY` 和 `openai/gpt-5.2`；非法 JSON/缺字段失败；普通文章不调用 AI；返回食材明细数组 | `npm test -- tests/admin/auth.test.ts` | done |
 | M4 后台编辑体验 | 食谱表单触发估算并展示结果 | 食谱可主动触发估算；结果保存后回显；失败提示可诊断；普通文章无估算入口 | `npm run e2e` | done |
 | M5 公开展示 | `/recipes` 和单篇详情页展示估算 | 列表只展示最终 kcal；详情展示每项食材 kcal 与加总说明；无估算不显示假值 | `npm test -- tests/public/posts.test.ts`；`npm run e2e` | done |
 | M6 存量回填 | 导出/导入存量食谱卡路里 JSONL | 以生产库实际食谱数量为准；JSONL 留档；导入幂等；报告成功/跳过/需复核 | `npm test -- tests/migration/migration.test.ts`；生产导入验证 | done |

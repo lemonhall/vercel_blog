@@ -2,7 +2,7 @@
 
 ## Goal
 
-后台新增或更新食谱时，管理员可以主动触发 Vercel AI Gateway 估算卡路里。估算使用普通 `openai/gpt-5.5`，结果持久化到 Supabase，并在后续编辑该食谱时回显。存量食谱通过本地 JSONL 估算导入，避免消耗 Vercel AI Gateway tokens。
+后台新增或更新食谱时，管理员可以主动触发 Vercel AI Gateway 估算卡路里。估算使用普通 `openai/gpt-5.2`，结果持久化到 Supabase，并在后续编辑该食谱时回显。存量食谱通过本地 JSONL 估算导入，避免消耗 Vercel AI Gateway tokens。
 
 ## PRD Trace
 
@@ -14,7 +14,7 @@
 
 - 新增 `recipe_nutrition_estimates` 表，用 `post_id` 关联 `posts`，每篇食谱保存一条最新估算。
 - 新增 `AI_GATEWAY_API_KEY` 环境变量，服务端读取，不暴露到前端。
-- 新增 AI 服务层，调用 Vercel AI Gateway 的 OpenAI 兼容接口，模型固定 `openai/gpt-5.5`。
+- 新增 AI 服务层，调用 Vercel AI Gateway 的 OpenAI 兼容接口，模型固定 `openai/gpt-5.2`。
 - AI prompt 要求结构化 JSON 输出，服务端校验字段、食材明细数组、数值范围和置信度。
 - 后台表单在食谱类型下提供“AI 估算卡路里”选项或动作。
 - 保存食谱且选择估算时，先保存文章和 tags，再调用 AI 并 upsert 卡路里估算。
@@ -26,7 +26,7 @@
 
 不做：
 
-- 不接入 `openai/gpt-5.5-pro`。
+- 不接入 `openai/gpt-5.2-pro`。
 - 不使用 Vercel OIDC 作为本项目的默认鉴权方式。
 - 不给普通文章提供卡路里估算。
 - 不做宏量营养素、微量元素或购物清单。
@@ -38,7 +38,7 @@
 - `.env.example` 和 `docs/setup/vercel-supabase-env.md` 包含 `AI_GATEWAY_API_KEY`，且安全注意事项明确不能提交或暴露。
 - `tests/foundation/schema.test.ts` 覆盖新表、唯一约束和字段。
 - `tests/foundation/env.test.ts` 覆盖 AI Gateway key 只作为可选服务端 secret 读取。
-- `tests/admin/auth.test.ts` 覆盖：普通文章保存不调用 AI；食谱保存且选择估算时调用 `openai/gpt-5.5`；AI 返回合法 JSON 后 upsert；非法 JSON 或调用失败返回明确错误。
+- `tests/admin/auth.test.ts` 覆盖：普通文章保存不调用 AI；食谱保存且选择估算时调用 `openai/gpt-5.2`；AI 返回合法 JSON 后 upsert；非法 JSON 或调用失败返回明确错误。
 - `tests/public/posts.test.ts` 覆盖：食谱列表查询返回最终 kcal；单篇详情查询返回食材明细；无估算不显示假值。
 - `tests/migration/migration.test.ts` 覆盖：存量卡路里 JSONL 导入幂等、非法行报告、低置信度标记复核。
 - `tests/e2e/public.spec.ts` 覆盖：管理员编辑食谱并选择估算；食谱列表显示最终 kcal；详情页显示食材明细。
@@ -91,7 +91,7 @@
 
 - Base URL：Vercel AI Gateway 的 OpenAI 兼容接口。
 - Auth：`Authorization: Bearer ${AI_GATEWAY_API_KEY}`。
-- Model：`openai/gpt-5.5`。
+- Model：`openai/gpt-5.2`。
 - Prompt version：`recipe-calorie-v1`。
 - 输出 JSON：
 

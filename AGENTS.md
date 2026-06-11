@@ -20,7 +20,7 @@
 - 真实迁移以 `refs/lemon_blog_sync_latest` 为输入，详见 `docs/plan/v2-index.md`。
 - 上传和导入真实数据前，必须确认 `.env` 中有 `BLOB_READ_WRITE_TOKEN`、`SUPABASE_DEV_URL`、`SUPABASE_DEV_SECRET_KEY`。
 - 食谱初始化标注必须来自 AI 阅读正文后的 JSONL；禁止用关键词规则、正则或纯程序分类替代 AI 判断。
-- 在线食谱卡路里估算使用 `AI_GATEWAY_API_KEY` 和普通 `openai/gpt-5.5`；不得使用 `openai/gpt-5.5-pro`，不得把 key 暴露到前端。
+- 在线食谱卡路里估算使用 `AI_GATEWAY_API_KEY` 和普通 `openai/gpt-5.2`；不得使用 `openai/gpt-5.2-pro`，不得把 key 暴露到前端。
 - 存量食谱卡路里回填使用本地 JSONL 估算导入，不消耗 Vercel AI Gateway tokens；导入必须幂等并保留明细。
 
 ## 必读文档
