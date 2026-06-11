@@ -160,6 +160,23 @@ export function validateRecipeNutritionJson(raw: unknown, meta: { model: string;
   };
 }
 
+async function gatewayErrorMessage(response: Response): Promise<string> {
+  const text = await response.text().catch(() => "");
+  if (!text.trim()) {
+    return `AI Gateway calorie estimation failed: ${response.status}`;
+  }
+  try {
+    const payload = JSON.parse(text) as { error?: { message?: string } | string; message?: string };
+    const message =
+      typeof payload.error === "string"
+        ? payload.error
+        : payload.error?.message ?? payload.message ?? text.slice(0, 500);
+    return `AI Gateway calorie estimation failed: ${response.status}: ${message}`;
+  } catch {
+    return `AI Gateway calorie estimation failed: ${response.status}: ${text.slice(0, 500)}`;
+  }
+}
+
 export async function estimateRecipeNutritionWithGateway(
   input: RecipeNutritionInput,
   options: { apiKey: string; fetchImpl?: typeof fetch }
@@ -184,11 +201,11 @@ export async function estimateRecipeNutritionWithGateway(
           content: buildRecipeNutritionPrompt(input)
         }
       ],
-      response_format: { type: "json_object" }
+      stream: false
     })
   });
   if (!response.ok) {
-    throw new Error(`AI Gateway calorie estimation failed: ${response.status}`);
+    throw new Error(await gatewayErrorMessage(response));
   }
   const payload = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;

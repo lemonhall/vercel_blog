@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { maybeEstimateAndSaveRecipeNutrition, deleteAdminPost, saveAdminPost } from "@/lib/admin-posts";
 import { createAdminSessionToken, verifyAdminPassword, verifyAdminSessionToken } from "@/lib/auth";
+import { estimateRecipeNutritionWithGateway } from "@/lib/recipe-nutrition";
 
 describe("admin auth", () => {
   it("verifies the configured admin password", () => {
@@ -247,5 +248,55 @@ describe("admin post actions", () => {
         }
       }
     ]);
+  });
+
+  it("uses AI Gateway chat completions without response_format for provider compatibility", async () => {
+    let requestBody: Record<string, unknown> | null = null;
+    const fetchImpl = async (_url: string, init?: RequestInit) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  servings: 2,
+                  calories_total_kcal: 600,
+                  calories_per_serving_kcal: 300,
+                  ingredient_estimates: [{ name: "鸡蛋", amount: "2个", calories_kcal: 160, note: "估算" }],
+                  confidence: 0.7,
+                  needs_review: false,
+                  summary: "每份约 300 kcal。"
+                })
+              }
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    };
+
+    await estimateRecipeNutritionWithGateway(
+      { title: "鸡蛋羹", slug: "egg", contentHtml: "<p>鸡蛋 2 个。</p>", tagNames: ["家常菜"] },
+      { apiKey: "key", fetchImpl: fetchImpl as typeof fetch }
+    );
+
+    expect(requestBody).toMatchObject({
+      model: "openai/gpt-5.5",
+      stream: false
+    });
+    expect(requestBody).not.toHaveProperty("response_format");
+  });
+
+  it("includes AI Gateway error body when calorie estimation is rejected", async () => {
+    const fetchImpl = async () =>
+      new Response(JSON.stringify({ error: { message: "Unsupported parameter: response_format" } }), { status: 400 });
+
+    await expect(
+      estimateRecipeNutritionWithGateway(
+        { title: "鸡蛋羹", slug: "egg", contentHtml: "<p>鸡蛋 2 个。</p>", tagNames: ["家常菜"] },
+        { apiKey: "key", fetchImpl: fetchImpl as typeof fetch }
+      )
+    ).rejects.toThrow("Unsupported parameter: response_format");
   });
 });
