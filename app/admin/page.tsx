@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { getServerEnv } from "@/lib/env";
 import { verifyAdminSessionToken } from "@/lib/auth";
 import { RichTextEditor } from "@/components/RichTextEditor";
-import { getPostForAdminBySlug, listDraftPosts, listTagsForPost, type Post } from "@/lib/posts";
+import { getPostForAdminBySlug, listDraftPosts, listRecipeNutritionEstimate, listTagsForPost, type Post } from "@/lib/posts";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +60,17 @@ async function safeListTagsForPost(post: Post | null) {
   }
 }
 
+async function safeListNutritionForPost(post: Post | null) {
+  if (!post || post.content_kind !== "recipe") {
+    return null;
+  }
+  try {
+    return await listRecipeNutritionEstimate(post.id);
+  } catch {
+    return null;
+  }
+}
+
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const params = await searchParams;
   const env = getServerEnv();
@@ -71,6 +82,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   );
   const editingPost = isAuthed && params?.edit ? await getPostForAdminBySlug(params.edit) : null;
   const editingTags = await safeListTagsForPost(editingPost);
+  const editingNutrition = await safeListNutritionForPost(editingPost);
   const drafts = isAuthed ? await listDraftPosts() : [];
   const nextPath = params?.next ?? nextPathForEdit(params?.edit);
 
@@ -101,6 +113,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               aria-label="Tags"
               defaultValue={editingTags.map((tag) => tag.name).join(", ")}
             />
+            <label className="checkbox-row">
+              <input type="checkbox" name="estimate_calories" value="1" />
+              AI 估算卡路里
+            </label>
+            {editingNutrition ? (
+              <div className="nutrition-summary" aria-label="已保存卡路里估算">
+                约 {editingNutrition.caloriesPerServingKcal ?? editingNutrition.caloriesTotalKcal} kcal
+                {editingNutrition.caloriesPerServingKcal ? "/份" : ""}
+              </div>
+            ) : null}
             <RichTextEditor name="content_html" initialHtml={editingPost?.content_html ?? ""} />
             <button className="button-link" type="submit">
               {editingPost ? "更新" : "保存"}

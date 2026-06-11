@@ -13,6 +13,7 @@
 - 公开页面在桌面和移动端有现代、可读、稳定的视觉体验。
 - 公开页面支持基础全文搜索，使用 Supabase Postgres 的 `ILIKE` 查询即可。
 - 食谱类文章可以形成独立频道，并通过 tags 云按菜系、食材、做法等维度浏览；多个 tags 同时选择时使用 AND 交集筛选。[ECN-0007]
+- 后台新增或更新食谱时，可以通过 Vercel AI Gateway 调用 `openai/gpt-5.5` 估算菜品卡路里；存量食谱先通过本地 JSONL 批量估算导入，估算总值与食材明细都持久化为可审计数据。[ECN-0008]
 
 ## Context
 
@@ -241,6 +242,45 @@
 - 初始化导入同一批 AI 标注结果重复运行不会产生重复 tags 或重复关联。
 - AI 标注结果必须以人类可读 JSON/JSONL 文件留档，便于抽查、修正和重跑。
 
+### REQ-0001-009: Recipe Calorie Estimation Through Vercel AI Gateway
+
+动机：食谱文章只提供正文和 tags，缺少对读者有用的能量信息。后台在新增或更新食谱时应能调用 AI 自动估算卡路里，减少手工计算成本；存量食谱也需要一次性估算并导入，且必须保留每个食材的估算依据、加总过程和不确定性。
+
+范围：
+
+- 仅当文章类型为 `recipe` 时提供 AI 卡路里估算能力。
+- AI 网关使用 Vercel AI Gateway，鉴权只使用服务端环境变量 `AI_GATEWAY_API_KEY`。
+- 默认模型固定为普通 `openai/gpt-5.5`，不使用 `openai/gpt-5.5-pro`。
+- AI 输入包含食谱标题、正文纯文本、tags 和可选份数信息。
+- AI 输出必须是结构化 JSON，至少包含总卡路里、每份卡路里、份数、食材明细数组、置信度、估算说明和是否需要人工复核。
+- 估算结果必须持久化到 Supabase，不只存在于浏览器状态或正文 HTML 中。
+- 每次估算必须记录模型、prompt 版本、输入内容 hash、原始 JSON 和更新时间，便于审计与重跑。
+- 公开 `/recipes` 列表只展示最终卡路里值，不展示食材明细。
+- 单篇食谱详情页展示总值、每份值和食材明细估算。
+- 存量食谱回填使用本地生成的 JSONL 文件，不消耗 Vercel AI Gateway tokens；导入脚本只负责校验、幂等 upsert 和报告。
+- 如果 AI Gateway 未配置、调用失败或返回 JSON 不合法，后台必须返回明确错误，不得破坏文章保存。
+
+非目标：
+
+- v6 不提供医学、营养师级别的精确营养建议。
+- v6 不做宏量营养素、微量元素或购物清单。
+- v6 不在公开页把估算伪装成精确营养事实。
+- v6 不要求存量估算达到营养师审核精度；低置信度或缺少份数/克重的条目必须标记人工复核。
+
+验收：
+
+- `.env.example` 和环境变量文档包含 `AI_GATEWAY_API_KEY`，且该变量不带 `NEXT_PUBLIC_` 前缀。
+- Supabase schema 包含可持久化每篇食谱最新卡路里估算的表，并以 `post_id` 关联 `posts`。
+- 后台保存普通文章不会调用 AI Gateway，也不会写入卡路里估算。
+- 后台保存食谱且选择 AI 估算时，会调用 `openai/gpt-5.5` 并持久化结构化估算结果。
+- 同一篇食谱重复估算会更新同一条最新估算记录，不产生多条“当前值”。
+- `/recipes` 列表中有估算的食谱只显示最终卡路里值；无估算的食谱不显示假值。
+- 单篇食谱详情页展示食材明细数组中的食材名、估算重量或用量、每项 kcal 和说明。
+- 存量食谱以生产库实际食谱数量为准完成首轮 JSONL 估算导入；导入报告包含总数、成功数、跳过数和需复核数。
+- AI 调用失败时，文章保存状态可判定：如果文章已保存则返回估算失败提示；如果文章保存失败则不调用 AI。
+- 单元测试覆盖 AI 输入构造、JSON 校验、普通文章不调用 AI、食谱估算持久化、公开查询返回最终值、详情查询返回明细和失败路径。
+- Playwright E2E 覆盖后台编辑食谱触发估算、食谱列表显示最终卡路里值、详情页显示明细。
+
 ## Proposed Data Model
 
 ```text
@@ -285,6 +325,23 @@ post_tags
 - post_id
 - tag_id
 - created_at
+
+recipe_nutrition_estimates
+- id
+- post_id
+- servings
+- calories_total_kcal
+- calories_per_serving_kcal
+- confidence
+- needs_review
+- summary
+- ingredient_estimates_json
+- model
+- prompt_version
+- source_hash
+- raw_estimate_json
+- created_at
+- updated_at
 ```
 
 ## Constraints
@@ -295,6 +352,8 @@ post_tags
 - Vercel Blob 用于图片，不把历史图片提交进 Git。
 - 正文 v1 继续保存 HTML，不在迁移阶段强制转 Markdown 或 TipTap JSON。
 - 所有迁移逻辑必须幂等。
+- Vercel AI Gateway 调用只允许在服务端执行，`AI_GATEWAY_API_KEY` 不得进入浏览器 bundle、日志或 Git。
+- AI 生成的卡路里是估算值，必须保留模型、prompt 和原始 JSON，不能作为医学或精确营养建议展示。
 
 ## Risks
 
@@ -303,3 +362,5 @@ post_tags
 - Vercel Blob 访问流量成本取决于真实访问量。
 - 后台认证如果设计过重，会拖慢 v1 交付。
 - `ILIKE` 搜索在数据量变大后可能变慢；v1 接受该取舍，后续可通过索引或 ECN 引入更强搜索。
+- AI Gateway 调用会产生模型费用和速率限制风险；v6 必须避免普通文章和未主动选择估算的保存动作触发调用。
+- 食谱正文缺少明确份数或食材克重时，卡路里估算可能偏差较大；v6 必须标记低置信度和人工复核状态。

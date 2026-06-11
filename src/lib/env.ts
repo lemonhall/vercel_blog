@@ -4,6 +4,7 @@ export type ServerEnv = {
   supabasePublishableKey: string;
   supabaseSecretKey: string;
   blobReadWriteToken: string;
+  aiGatewayApiKey?: string;
   adminPassword: string;
   authCookieSecret: string;
 };
@@ -48,6 +49,7 @@ export function parseServerEnv(input: Record<string, string | undefined>): Serve
     supabasePublishableKey: publishableKey!,
     supabaseSecretKey: secretKey!,
     blobReadWriteToken: input.BLOB_READ_WRITE_TOKEN!,
+    aiGatewayApiKey: input.AI_GATEWAY_API_KEY?.trim() || undefined,
     adminPassword: input.ADMIN_PASSWORD!,
     authCookieSecret: input.AUTH_COOKIE_SECRET!
   };

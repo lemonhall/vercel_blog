@@ -1,6 +1,11 @@
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { fixturePostTags, fixturePosts, useFixtureData } from "@/lib/fixture-data";
 import { tagSlugFromName } from "@/lib/tags";
+import {
+  nutritionFromRpcRow,
+  type RecipeNutritionEstimate,
+  type RecipeNutritionListEstimate
+} from "@/lib/recipe-nutrition";
 
 export type PostStatus = "draft" | "published";
 export type ContentKind = "post" | "recipe";
@@ -31,6 +36,11 @@ export type RecipeTag = Tag & {
 
 export type PostWithTags = Post & {
   tags: Tag[];
+  nutrition?: RecipeNutritionListEstimate | null;
+};
+
+export type PostWithNutrition = Post & {
+  nutrition?: RecipeNutritionEstimate | null;
 };
 
 export type PostSort = "asc" | "desc";
@@ -135,18 +145,22 @@ function recipePosts(): Post[] {
 
 async function attachTagsToPosts(posts: Post[], client?: SupabaseLike): Promise<PostWithTags[]> {
   if (!client && useFixtureData()) {
-    return posts.map((post) => ({
-      ...post,
-      tags: fixturePostTags
-        .filter((link) => link.postId === post.id)
-        .map((link) => ({ id: tagSlugFromName(link.name), name: link.name, slug: tagSlugFromName(link.name) }))
-    }));
+    return Promise.all(
+      posts.map(async (post) => ({
+        ...post,
+        tags: fixturePostTags
+          .filter((link) => link.postId === post.id)
+          .map((link) => ({ id: tagSlugFromName(link.name), name: link.name, slug: tagSlugFromName(link.name) })),
+        nutrition: await listRecipeNutritionEstimate(post.id)
+      }))
+    );
   }
 
   const entries = await Promise.all(
     posts.map(async (post) => ({
       ...post,
-      tags: await listTagsForPost(post.id, client)
+      tags: await listTagsForPost(post.id, client),
+      nutrition: await listRecipeNutritionEstimate(post.id, client, false)
     }))
   );
   return entries;
@@ -547,6 +561,63 @@ export async function listTagsForPost(postId: string, client?: SupabaseLike): Pr
   return (data as Tag[] | null) ?? [];
 }
 
+export async function listRecipeNutritionEstimate(
+  postId: string,
+  client?: SupabaseLike,
+  includeIngredients = false
+): Promise<RecipeNutritionEstimate | RecipeNutritionListEstimate | null> {
+  if (!client && useFixtureData()) {
+    if (postId !== "fixture-2") {
+      return null;
+    }
+    const base = {
+      servings: 4,
+      caloriesTotalKcal: 1800,
+      caloriesPerServingKcal: 450,
+      confidence: 0.72,
+      needsReview: false,
+      summary: "每份约 450 kcal。",
+      model: "fixture",
+      promptVersion: "fixture",
+      sourceHash: "fixture"
+    };
+    if (!includeIngredients) {
+      return base;
+    }
+    return {
+      ...base,
+      ingredientEstimates: [
+        { name: "牛肉", amount: "500g", caloriesKcal: 1250, note: "按 250 kcal/100g 估算" },
+        { name: "鹰嘴豆", amount: "200g", caloriesKcal: 328, note: "按熟鹰嘴豆估算" }
+      ],
+      rawEstimateJson: {}
+    };
+  }
+
+  const supabase = resolveClient(client);
+  let result: {
+    data: unknown[] | null;
+    error: QueryError | null;
+  };
+  try {
+    result = (await supabase.rpc("list_recipe_nutrition_estimate", { target_post_id: postId })) as {
+      data: unknown[] | null;
+      error: QueryError | null;
+    };
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes("unexpected rpc") || error.message.includes("must not use global search RPC"))) {
+      return null;
+    }
+    throw error;
+  }
+  const { data, error } = await result;
+  if (error && (error.message.includes("unexpected rpc") || error.message.includes("must not use global search RPC"))) {
+    return null;
+  }
+  throwIfError(error);
+  return nutritionFromRpcRow((data?.[0] as Parameters<typeof nutritionFromRpcRow>[0]) ?? null, includeIngredients as true);
+}
+
 export async function listPublishedPostsPage(
   options: PostPageOptions = {},
   client?: SupabaseLike
@@ -610,6 +681,20 @@ export async function getPostBySlug(slug: string, client?: SupabaseLike): Promis
 
   throwIfError(error);
   return (data as Post | null) ?? null;
+}
+
+export async function getPostWithNutritionBySlug(slug: string, client?: SupabaseLike): Promise<PostWithNutrition | null> {
+  const post = await getPostBySlug(slug, client);
+  if (!post) {
+    return null;
+  }
+  if (post.content_kind !== "recipe") {
+    return { ...post, nutrition: null };
+  }
+  return {
+    ...post,
+    nutrition: (await listRecipeNutritionEstimate(post.id, client, true)) as RecipeNutritionEstimate | null
+  };
 }
 
 export async function getPostForAdminBySlug(slug: string, client?: SupabaseLike): Promise<Post | null> {

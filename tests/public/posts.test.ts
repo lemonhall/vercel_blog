@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { sanitizePostHtml } from "@/lib/html";
 import {
   getPostBySlug,
+  getPostWithNutritionBySlug,
   listDraftPosts,
   listPublishedPostsPage,
   listRecipePosts,
@@ -267,7 +268,7 @@ describe("recipe queries", () => {
 
   it("uses pagination and attaches tags for recipe pages", async () => {
     const calls: Array<{ name: string; args: unknown[] }> = [];
-    const post = {
+    const recipePost = {
       id: "recipe-1",
       legacy_id: 6,
       title: "鹰嘴豆炖牛肉",
@@ -294,7 +295,7 @@ describe("recipe queries", () => {
       },
       range(from: number, to: number) {
         calls.push({ name: "range", args: [from, to] });
-        return Promise.resolve({ data: [post], error: null, count: 21 });
+        return Promise.resolve({ data: [recipePost], error: null, count: 21 });
       },
       single() {
         throw new Error("must not fetch single");
@@ -359,7 +360,7 @@ describe("recipe queries", () => {
 
   it("uses an AND-style tag RPC for multi-tag recipe filtering", async () => {
     const calls: Array<{ name: string; args: unknown }> = [];
-    const post = {
+    const recipePost = {
       id: "recipe-1",
       legacy_id: 6,
       title: "鹰嘴豆炖牛肉",
@@ -379,7 +380,7 @@ describe("recipe queries", () => {
       rpc(name: string, args?: unknown) {
         calls.push({ name, args });
         if (name === "list_recipe_posts_by_tags") {
-          return Promise.resolve({ data: [post], error: null });
+          return Promise.resolve({ data: [recipePost], error: null });
         }
         if (name === "list_tags_for_post") {
           return Promise.resolve({
@@ -560,6 +561,83 @@ describe("recipe queries", () => {
       args: { q: "牛肉", tag_slugs: ["beef", "stew"] }
     });
   });
+
+  it("attaches final calories to recipe list items without exposing ingredient details", async () => {
+    const post = {
+      id: "recipe-1",
+      legacy_id: 6,
+      title: "鹰嘴豆炖牛肉",
+      slug: "beef-and-chickpeas",
+      content_html: "<p>body</p>",
+      excerpt: null,
+      status: "published" as const,
+      content_kind: "recipe" as const,
+      created_at: "2022-05-23T21:09:02.478Z",
+      updated_at: "2022-05-23T21:24:19.540Z",
+      published_at: "2022-05-23T21:09:02.478Z"
+    };
+    const builder = {
+      eq() {
+        return builder;
+      },
+      order() {
+        return builder;
+      },
+      limit() {
+        throw new Error("must use range");
+      },
+      range() {
+        return Promise.resolve({ data: [post], error: null, count: 1 });
+      },
+      single() {
+        throw new Error("must not fetch single");
+      },
+      maybeSingle() {
+        throw new Error("must not fetch single");
+      }
+    };
+    const client = {
+      from() {
+        return {
+          select() {
+            return builder;
+          }
+        };
+      },
+      rpc(name: string, args?: unknown) {
+        if (name === "list_tags_for_post") {
+          return Promise.resolve({ data: [], error: null });
+        }
+        if (name === "list_recipe_nutrition_estimate") {
+          expect(args).toEqual({ target_post_id: "recipe-1" });
+          return Promise.resolve({
+            data: [
+              {
+                calories_total_kcal: 1800,
+                calories_per_serving_kcal: 450,
+                servings: 4,
+                confidence: 0.72,
+                needs_review: false,
+                summary: "每份约 450 kcal。",
+                ingredient_estimates_json: [{ name: "牛肉", calories_kcal: 1250 }]
+              }
+            ],
+            error: null
+          });
+        }
+        throw new Error(`unexpected rpc ${name}`);
+      }
+    };
+
+    const result = await listRecipePostsPage({ page: 1, pageSize: 10 }, client);
+
+    expect(result.posts[0].nutrition).toMatchObject({
+      caloriesTotalKcal: 1800,
+      caloriesPerServingKcal: 450,
+      servings: 4
+    });
+    expect(result.posts[0].nutrition).not.toHaveProperty("ingredientEstimates");
+  });
 });
 
 describe("getPostBySlug", () => {
@@ -637,5 +715,79 @@ describe("getPostBySlug", () => {
     const { client } = createPostLookupClient();
 
     await expect(getPostBySlug("missing-post", client)).resolves.toBeNull();
+  });
+
+  it("returns ingredient calorie details for recipe detail pages", async () => {
+    const calls: Array<{ column: string; value: unknown }> = [];
+    const post = {
+      id: "post-1",
+      legacy_id: 6,
+      title: "鹰嘴豆炖牛肉",
+      slug: "beef-and-chickpeas",
+      content_html: "<p>body</p>",
+      excerpt: null,
+      status: "published" as const,
+      content_kind: "recipe" as const,
+      created_at: "2022-05-23T21:09:02.478Z",
+      updated_at: "2022-05-23T21:24:19.540Z",
+      published_at: "2022-05-23T21:09:02.478Z"
+    };
+    const builder = {
+      eq(column: string, value: unknown) {
+        calls.push({ column, value });
+        return builder;
+      },
+      maybeSingle() {
+        return Promise.resolve({ data: post, error: null });
+      },
+      order() {
+        return builder;
+      },
+      limit() {
+        return Promise.resolve({ data: [], error: null });
+      },
+      range() {
+        return Promise.resolve({ data: [], error: null });
+      },
+      single() {
+        return builder.maybeSingle();
+      }
+    };
+    const postWithNutrition = await getPostWithNutritionBySlug(
+      "beef-and-chickpeas",
+      {
+        from() {
+          return {
+            select() {
+              return builder;
+            }
+          };
+        },
+        rpc(name: string, args?: unknown) {
+          if (name === "list_recipe_nutrition_estimate") {
+            expect(args).toEqual({ target_post_id: "post-1" });
+            return Promise.resolve({
+              data: [
+                {
+                  calories_total_kcal: 1800,
+                  calories_per_serving_kcal: 450,
+                  servings: 4,
+                  confidence: 0.72,
+                  needs_review: false,
+                  summary: "每份约 450 kcal。",
+                  ingredient_estimates_json: [{ name: "牛肉", amount: "500g", calories_kcal: 1250, note: "估算" }]
+                }
+              ],
+              error: null
+            });
+          }
+          throw new Error(`unexpected rpc ${name}`);
+        }
+      }
+    );
+
+    expect(postWithNutrition?.nutrition?.ingredientEstimates).toEqual([
+      { name: "牛肉", amount: "500g", caloriesKcal: 1250, note: "估算" }
+    ]);
   });
 });

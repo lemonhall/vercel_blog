@@ -1,4 +1,5 @@
 import { excerptFromHtml } from "@/lib/html";
+import { RECIPE_CALORIE_MODEL, type RecipeNutritionEstimate, type RecipeNutritionInput } from "@/lib/recipe-nutrition";
 
 export type AdminPostStatus = "draft" | "published";
 export type AdminContentKind = "post" | "recipe";
@@ -11,6 +12,7 @@ export type AdminPostInput = {
   status: AdminPostStatus;
   contentKind?: AdminContentKind;
   tagNames?: string[];
+  estimateCalories?: boolean;
 };
 
 type MutationResult = PromiseLike<{ data: unknown; error: { message: string } | null }>;
@@ -25,6 +27,10 @@ export type AdminPostClient = {
   from(table: "posts" | string): AdminPostMutationBuilder;
   rpc?(name: string, args: Record<string, unknown>): MutationResult;
 };
+
+export type RecipeNutritionEstimator = (
+  input: RecipeNutritionInput & { model: string }
+) => Promise<RecipeNutritionEstimate>;
 
 function throwIfError(error: { message: string } | null): void {
   if (error) {
@@ -63,6 +69,42 @@ export async function saveAdminPost(input: AdminPostInput, client: AdminPostClie
     throwIfError(tagResult.error);
   }
   return input.slug;
+}
+
+export async function maybeEstimateAndSaveRecipeNutrition(
+  input: AdminPostInput,
+  client: AdminPostClient,
+  estimator: RecipeNutritionEstimator
+): Promise<void> {
+  if (input.contentKind !== "recipe" || !input.estimateCalories) {
+    return;
+  }
+  if (!client.rpc) {
+    throw new Error("recipe nutrition persistence requires RPC support");
+  }
+
+  const estimate = await estimator({
+    title: input.title,
+    slug: input.slug,
+    contentHtml: input.contentHtml,
+    tagNames: input.tagNames ?? [],
+    model: RECIPE_CALORIE_MODEL
+  });
+  const result = await client.rpc("save_recipe_nutrition_estimate", {
+    post_slug: input.slug,
+    servings: estimate.servings,
+    calories_total_kcal: estimate.caloriesTotalKcal,
+    calories_per_serving_kcal: estimate.caloriesPerServingKcal,
+    ingredient_estimates_json: estimate.ingredientEstimates,
+    confidence: estimate.confidence,
+    needs_review: estimate.needsReview,
+    summary: estimate.summary,
+    model: estimate.model,
+    prompt_version: estimate.promptVersion,
+    source_hash: estimate.sourceHash,
+    raw_estimate_json: estimate.rawEstimateJson
+  });
+  throwIfError(result.error);
 }
 
 export async function deleteAdminPost(slug: string, client: AdminPostClient): Promise<void> {

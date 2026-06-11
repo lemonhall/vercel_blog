@@ -4,6 +4,7 @@ import { getServerEnv } from "@/lib/env";
 import { verifyAdminSessionToken } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import {
+  maybeEstimateAndSaveRecipeNutrition,
   normalizeAdminContentKind,
   normalizeAdminPostStatus,
   saveAdminPost,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/admin-posts";
 import { useFixtureData } from "@/lib/fixture-data";
 import { parseTagInput } from "@/lib/tags";
+import { estimateRecipeNutritionWithGateway } from "@/lib/recipe-nutrition";
 
 async function requireAdmin(): Promise<boolean> {
   const env = getServerEnv();
@@ -31,6 +33,7 @@ export async function POST(request: Request) {
   const status = normalizeAdminPostStatus(String(form.get("status") ?? "draft"));
   const contentKind = normalizeAdminContentKind(String(form.get("content_kind") ?? "post"));
   const tagNames = parseTagInput(String(form.get("tags") ?? ""));
+  const estimateCalories = form.get("estimate_calories") === "1";
 
   if (!title || !slug) {
     return NextResponse.json({ error: "title and slug are required" }, { status: 400 });
@@ -39,9 +42,20 @@ export async function POST(request: Request) {
   const supabase = createSupabaseServiceClient();
   try {
     if (!useFixtureData()) {
+      const env = getServerEnv();
       await saveAdminPost(
         { id: id || undefined, title, slug, contentHtml, status, contentKind, tagNames },
         supabase as unknown as AdminPostClient
+      );
+      await maybeEstimateAndSaveRecipeNutrition(
+        { id: id || undefined, title, slug, contentHtml, status, contentKind, tagNames, estimateCalories },
+        supabase as unknown as AdminPostClient,
+        (input) => {
+          if (!env.aiGatewayApiKey) {
+            throw new Error("AI_GATEWAY_API_KEY is required for recipe calorie estimation");
+          }
+          return estimateRecipeNutritionWithGateway(input, { apiKey: env.aiGatewayApiKey });
+        }
       );
     }
   } catch (error) {

@@ -11,6 +11,7 @@
 - v3：公开首页分页、排序、宽模式、footer、前台管理员编辑入口和逻辑删除。
 - v4：TipTap 富文本编辑器升级，支持常用格式、图片、表格、代码块、sticky 工具栏和移动端适配。
 - v5：食谱频道、`content_kind`、`tags` / `post_tags`、食谱 tag 云、tag 过滤页、食谱内搜索和 AI JSONL 标注导入链路。
+- v6：Vercel AI Gateway 食谱卡路里估算、估算结果持久化、食谱列表最终 kcal 展示、详情页食材明细展示、存量食谱本地 JSONL 估算导入。
 
 迁移范围：
 
@@ -19,6 +20,8 @@
 - 真实迁移以 `refs/lemon_blog_sync_latest` 为输入，详见 `docs/plan/v2-index.md`。
 - 上传和导入真实数据前，必须确认 `.env` 中有 `BLOB_READ_WRITE_TOKEN`、`SUPABASE_DEV_URL`、`SUPABASE_DEV_SECRET_KEY`。
 - 食谱初始化标注必须来自 AI 阅读正文后的 JSONL；禁止用关键词规则、正则或纯程序分类替代 AI 判断。
+- 在线食谱卡路里估算使用 `AI_GATEWAY_API_KEY` 和普通 `openai/gpt-5.5`；不得使用 `openai/gpt-5.5-pro`，不得把 key 暴露到前端。
+- 存量食谱卡路里回填使用本地 JSONL 估算导入，不消耗 Vercel AI Gateway tokens；导入必须幂等并保留明细。
 
 ## 必读文档
 
@@ -28,6 +31,7 @@
 - v3 前台体验计划：`docs/plan/v3-index.md`
 - v4 编辑器计划：`docs/plan/v4-index.md`
 - v5 食谱 tags 计划：`docs/plan/v5-index.md`
+- v6 食谱卡路里计划：`docs/plan/v6-index.md`
 - 环境变量指南：`docs/setup/vercel-supabase-env.md`
 - ECN：`docs/ecn/`
 
@@ -78,6 +82,7 @@ CLI 工具：
 - HTML 清洗：`src/lib/html.ts`。
 - 富文本编辑器：`src/components/RichTextEditor.tsx`。
 - 迁移计划与状态：`src/lib/migration/`、`scripts/migrate/cli.ts`。
+- 食谱卡路里估算：`src/lib/recipe-nutrition.ts`。
 - 数据库 schema：`supabase/schema.sql`。
 
 核心数据流：
@@ -87,6 +92,7 @@ Next.js route -> src/lib/* -> Supabase RPC/table query -> page render
 Admin form -> app/api/admin/posts -> saveAdminPost -> Supabase posts/tags
 Editor image upload -> app/api/uploads/image -> Vercel Blob -> content_html
 Migration CLI -> Linode snapshot -> Vercel Blob + Supabase -> reports/state
+Recipe calorie estimate -> AI Gateway or JSONL -> Supabase -> recipes list/detail
 ```
 
 ## Playwright 浏览器
@@ -101,6 +107,7 @@ Migration CLI -> Linode snapshot -> Vercel Blob + Supabase -> reports/state
 - `refs/` 必须保持 git 忽略。
 - `.env`、`refs/`、`.tmp/`、`.next/`、`test-results/` 都不要提交。
 - 不要提交 `.env`、Supabase secret key、Blob token 或 APNs 密钥。
+- 不要提交或记录 `AI_GATEWAY_API_KEY`。
 - 用户上传不要写入项目文件系统。
 - 运行时图片上传只使用 Vercel Blob。
 - 数据库使用 Supabase Postgres。
@@ -118,6 +125,7 @@ Migration CLI -> Linode snapshot -> Vercel Blob + Supabase -> reports/state
 - 修改 Supabase schema 后，同步更新 `tests/foundation/schema.test.ts` 和环境/初始化文档。
 - 修改公开查询、食谱、tags、后台保存或逻辑删除时，优先补 `tests/public/posts.test.ts`、`tests/admin/auth.test.ts` 或 `tests/e2e/public.spec.ts`。
 - 修改迁移逻辑时，补 `tests/migration/migration.test.ts`，并至少跑 `npm test -- tests/migration/migration.test.ts`。
+- 修改食谱卡路里估算时，必须覆盖 schema、env、后台保存、公开列表/详情和存量 JSONL 导入测试。
 
 ## 前端风格
 

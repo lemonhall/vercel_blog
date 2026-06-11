@@ -7,6 +7,11 @@ import {
   summarizePlan
 } from "@/lib/migration/planner";
 import { exportRecipeCandidatesToJsonl, importRecipeLabelsFromJsonl } from "@/lib/migration/recipe-labels";
+import {
+  estimateRecipeCaloriesLocallyFromCandidatesJsonl,
+  exportRecipeCalorieCandidatesToJsonl,
+  importRecipeCalorieEstimatesFromJsonl
+} from "@/lib/migration/recipe-calories";
 import { createInitialState, markAssetUploaded, pendingAssets } from "@/lib/migration/state";
 import type { LegacyNote, LocalImage } from "@/lib/migration/types";
 
@@ -189,5 +194,119 @@ describe("recipe label import", () => {
       name: "rpc",
       args: ["save_post_tags_for_post", { target_post_id: "post-1", tag_names: ["牛肉", "炖菜"] }]
     });
+  });
+});
+
+describe("recipe calorie estimate import", () => {
+  it("exports recipe calorie candidates with tags and readable content", () => {
+    const jsonl = exportRecipeCalorieCandidatesToJsonl([
+      {
+        id: "post-1",
+        legacy_id: 7,
+        title: "番茄牛肉汤",
+        slug: "tomato-beef-soup",
+        content_html: "<p>牛肉 500g，番茄 300g，加少量油炖煮。</p>",
+        excerpt: null,
+        created_at: "2022-05-23T00:00:00.000Z",
+        updated_at: "2022-05-23T00:00:00.000Z",
+        tags: ["牛肉", "炖菜"]
+      }
+    ]);
+
+    const candidate = JSON.parse(jsonl) as Record<string, unknown>;
+
+    expect(candidate).toMatchObject({
+      post_id: "post-1",
+      title: "番茄牛肉汤",
+      slug: "tomato-beef-soup",
+      tags: ["牛肉", "炖菜"]
+    });
+    expect(candidate.content_text).toBe("牛肉 500g，番茄 300g，加少量油炖煮。");
+  });
+
+  it("locally estimates ingredient calories from candidates without using AI Gateway", () => {
+    const candidates = [
+      JSON.stringify({
+        post_id: "post-1",
+        title: "番茄牛肉汤",
+        slug: "tomato-beef-soup",
+        tags: ["牛肉", "炖菜"],
+        content_text: "牛肉 500g，番茄 300g，加少量油炖煮。"
+      })
+    ].join("\n");
+
+    const estimates = estimateRecipeCaloriesLocallyFromCandidatesJsonl(candidates);
+    const estimate = JSON.parse(estimates) as Record<string, unknown>;
+
+    expect(estimate).toMatchObject({
+      post_id: "post-1",
+      servings: 4,
+      calories_total_kcal: expect.any(Number),
+      calories_per_serving_kcal: expect.any(Number),
+      needs_review: false
+    });
+    expect(estimate.calories_total_kcal).toBeGreaterThanOrEqual(1300);
+    expect(estimate.ingredient_estimates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "牛肉", amount: "500g", calories_kcal: 1250 }),
+        expect.objectContaining({ name: "番茄", amount: "300g", calories_kcal: 54 })
+      ])
+    );
+  });
+
+  it("imports local JSONL calorie estimates idempotently through the nutrition RPC", async () => {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const client = {
+      from() {
+        throw new Error("must use rpc");
+      },
+      rpc(name: string, args: unknown) {
+        calls.push({ name, args });
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+    const jsonl = [
+      JSON.stringify({
+        post_id: "post-1",
+        servings: 4,
+        calories_total_kcal: 1800,
+        calories_per_serving_kcal: 450,
+        ingredient_estimates: [{ name: "牛肉", amount: "500g", calories_kcal: 1250, note: "按 250 kcal/100g 估算" }],
+        confidence: 0.72,
+        needs_review: false,
+        summary: "每份约 450 kcal。"
+      }),
+      JSON.stringify({
+        post_id: "post-2",
+        servings: 0,
+        calories_total_kcal: -1,
+        ingredient_estimates: [],
+        confidence: 0.4,
+        summary: "非法"
+      })
+    ].join("\n");
+
+    const result = await importRecipeCalorieEstimatesFromJsonl(jsonl, client);
+
+    expect(result).toEqual({ imported: 1, skipped: 1, needsReview: 0 });
+    expect(calls).toEqual([
+      {
+        name: "save_recipe_nutrition_estimate_for_post",
+        args: {
+          target_post_id: "post-1",
+          servings: 4,
+          calories_total_kcal: 1800,
+          calories_per_serving_kcal: 450,
+          ingredient_estimates_json: [{ name: "牛肉", amount: "500g", calories_kcal: 1250, note: "按 250 kcal/100g 估算" }],
+          confidence: 0.72,
+          needs_review: false,
+          summary: "每份约 450 kcal。",
+          model: "local-agent",
+          prompt_version: "recipe-calorie-local-v1",
+          source_hash: expect.any(String),
+          raw_estimate_json: expect.any(Object)
+        }
+      }
+    ]);
   });
 });

@@ -8,6 +8,7 @@ describe("parseServerEnv", () => {
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable",
       SUPABASE_SECRET_KEY: "secret-key",
       BLOB_READ_WRITE_TOKEN: "blob",
+      AI_GATEWAY_API_KEY: "ai-gateway",
       ADMIN_PASSWORD: "password",
       AUTH_COOKIE_SECRET: "secret"
     });
@@ -16,6 +17,7 @@ describe("parseServerEnv", () => {
     expect(env.supabasePublishableKey).toBe("publishable");
     expect(env.supabaseSecretKey).toBe("secret-key");
     expect(env.blobReadWriteToken).toBe("blob");
+    expect(env.aiGatewayApiKey).toBe("ai-gateway");
     expect(env.adminPassword).toBe("password");
     expect(env.authCookieSecret).toBe("secret");
   });
@@ -72,5 +74,18 @@ describe("parseServerEnv", () => {
 
     expect(env.supabasePublishableKey).toBe("anon");
     expect(env.supabaseSecretKey).toBe("service-role");
+  });
+
+  it("treats AI Gateway key as an optional server-only setting", () => {
+    const env = parseServerEnv({
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable",
+      SUPABASE_SECRET_KEY: "secret-key",
+      BLOB_READ_WRITE_TOKEN: "blob",
+      ADMIN_PASSWORD: "password",
+      AUTH_COOKIE_SECRET: "secret"
+    });
+
+    expect(env.aiGatewayApiKey).toBeUndefined();
   });
 });

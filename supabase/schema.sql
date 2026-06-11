@@ -62,6 +62,25 @@ create table if not exists public.post_tags (
   primary key (post_id, tag_id)
 );
 
+create table if not exists public.recipe_nutrition_estimates (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  servings integer not null check (servings > 0),
+  calories_total_kcal integer not null check (calories_total_kcal > 0),
+  calories_per_serving_kcal integer check (calories_per_serving_kcal > 0),
+  confidence numeric not null default 0 check (confidence >= 0 and confidence <= 1),
+  needs_review boolean not null default false,
+  summary text not null default '',
+  ingredient_estimates_json jsonb not null default '[]'::jsonb,
+  model text not null,
+  prompt_version text not null,
+  source_hash text not null,
+  raw_estimate_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(post_id)
+);
+
 create index if not exists posts_status_published_at_idx
   on public.posts(status, published_at desc);
 
@@ -76,6 +95,9 @@ create index if not exists assets_legacy_path_idx
 
 create index if not exists post_tags_tag_id_idx
   on public.post_tags(tag_id);
+
+create index if not exists recipe_nutrition_estimates_post_id_idx
+  on public.recipe_nutrition_estimates(post_id);
 
 create or replace function public.tag_slug_from_name(tag_name text)
 returns text
@@ -154,6 +176,145 @@ begin
   end if;
   perform public.save_post_tags_for_post(target_post_id, tag_names);
 end;
+$$;
+
+create or replace function public.save_recipe_nutrition_estimate_for_post(
+  target_post_id uuid,
+  servings integer,
+  calories_total_kcal integer,
+  calories_per_serving_kcal integer,
+  ingredient_estimates_json jsonb,
+  confidence numeric,
+  needs_review boolean,
+  summary text,
+  model text,
+  prompt_version text,
+  source_hash text,
+  raw_estimate_json jsonb
+)
+returns void
+language sql
+as $$
+  insert into public.recipe_nutrition_estimates(
+    post_id,
+    servings,
+    calories_total_kcal,
+    calories_per_serving_kcal,
+    ingredient_estimates_json,
+    confidence,
+    needs_review,
+    summary,
+    model,
+    prompt_version,
+    source_hash,
+    raw_estimate_json,
+    updated_at
+  )
+  values (
+    target_post_id,
+    servings,
+    calories_total_kcal,
+    calories_per_serving_kcal,
+    coalesce(ingredient_estimates_json, '[]'::jsonb),
+    confidence,
+    needs_review,
+    summary,
+    model,
+    prompt_version,
+    source_hash,
+    coalesce(raw_estimate_json, '{}'::jsonb),
+    now()
+  )
+  on conflict (post_id) do update set
+    servings = excluded.servings,
+    calories_total_kcal = excluded.calories_total_kcal,
+    calories_per_serving_kcal = excluded.calories_per_serving_kcal,
+    ingredient_estimates_json = excluded.ingredient_estimates_json,
+    confidence = excluded.confidence,
+    needs_review = excluded.needs_review,
+    summary = excluded.summary,
+    model = excluded.model,
+    prompt_version = excluded.prompt_version,
+    source_hash = excluded.source_hash,
+    raw_estimate_json = excluded.raw_estimate_json,
+    updated_at = now();
+$$;
+
+create or replace function public.save_recipe_nutrition_estimate(
+  post_slug text,
+  servings integer,
+  calories_total_kcal integer,
+  calories_per_serving_kcal integer,
+  ingredient_estimates_json jsonb,
+  confidence numeric,
+  needs_review boolean,
+  summary text,
+  model text,
+  prompt_version text,
+  source_hash text,
+  raw_estimate_json jsonb
+)
+returns void
+language plpgsql
+as $$
+declare
+  target_post_id uuid;
+begin
+  select id into target_post_id from public.posts where slug = post_slug;
+  if target_post_id is null then
+    raise exception 'post not found for slug %', post_slug;
+  end if;
+  perform public.save_recipe_nutrition_estimate_for_post(
+    target_post_id,
+    servings,
+    calories_total_kcal,
+    calories_per_serving_kcal,
+    ingredient_estimates_json,
+    confidence,
+    needs_review,
+    summary,
+    model,
+    prompt_version,
+    source_hash,
+    raw_estimate_json
+  );
+end;
+$$;
+
+create or replace function public.list_recipe_nutrition_estimate(target_post_id uuid)
+returns table(
+  servings integer,
+  calories_total_kcal integer,
+  calories_per_serving_kcal integer,
+  confidence numeric,
+  needs_review boolean,
+  summary text,
+  ingredient_estimates_json jsonb,
+  model text,
+  prompt_version text,
+  source_hash text,
+  raw_estimate_json jsonb,
+  updated_at timestamptz
+)
+language sql
+stable
+as $$
+  select
+    servings,
+    calories_total_kcal,
+    calories_per_serving_kcal,
+    confidence,
+    needs_review,
+    summary,
+    ingredient_estimates_json,
+    model,
+    prompt_version,
+    source_hash,
+    raw_estimate_json,
+    updated_at
+  from public.recipe_nutrition_estimates
+  where post_id = target_post_id
+  limit 1;
 $$;
 
 create or replace function public.list_recipe_tags()

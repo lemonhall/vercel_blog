@@ -35,4 +35,15 @@ describe("Supabase schema", () => {
     expect(schema).toContain("select distinct trim(value) as slug");
     expect(schema).toContain("having count(distinct tags.slug) = (select count(*) from selected_tags)");
   });
+
+  it("defines recipe nutrition estimate persistence", () => {
+    expect(schema).toContain("create table if not exists public.recipe_nutrition_estimates");
+    expect(schema).toContain("post_id uuid not null references public.posts(id) on delete cascade");
+    expect(schema).toContain("calories_total_kcal integer not null");
+    expect(schema).toContain("calories_per_serving_kcal integer");
+    expect(schema).toContain("ingredient_estimates_json jsonb not null default '[]'::jsonb");
+    expect(schema).toContain("unique(post_id)");
+    expect(schema).toContain("create or replace function public.save_recipe_nutrition_estimate");
+    expect(schema).toContain("create or replace function public.list_recipe_nutrition_estimate");
+  });
 });

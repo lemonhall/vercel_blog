@@ -9,10 +9,12 @@
 - Next.js App Router + TypeScript。
 - Supabase Postgres schema，包含文章、资产、食谱 tags。
 - Vercel Blob 图片上传接口。
+- Vercel AI Gateway 食谱卡路里估算接口。
 - 单人后台登录、TipTap 富文本编辑器、草稿管理、文章保存接口。
 - 公开首页、文章详情页、数据库 `ILIKE` 搜索、分页、排序、宽模式。
 - 前台管理员编辑入口和逻辑删除，删除只把文章降为草稿。
 - `/recipes` 食谱频道、食谱 tags 云、tag 多选 AND 过滤和食谱内搜索。
+- 食谱卡路里估算持久化：列表显示最终 kcal，详情页显示食材明细。
 - 迁移 CLI 支持 Linode 同步快照 inventory、图片上传、文章导入和 dry-run 报告。
 - Playwright fixture 模式，避免 E2E 依赖真实 Supabase。
 
@@ -34,6 +36,7 @@
 - React 19
 - Supabase Postgres
 - Vercel Blob
+- Vercel AI Gateway
 - TipTap
 - Vitest
 - Playwright
@@ -128,6 +131,8 @@ npm run migrate -- --phase verify
 
 真实上传和导入需要 `.env` 中配置 `BLOB_READ_WRITE_TOKEN`、`SUPABASE_DEV_URL` 和 `SUPABASE_DEV_SECRET_KEY`。
 
+在线食谱卡路里估算还需要配置 `AI_GATEWAY_API_KEY`。存量食谱批量估算走本地 JSONL 导入，不消耗 Vercel AI Gateway tokens。
+
 ## 验证
 
 ```powershell
@@ -144,6 +149,7 @@ E2E 通过 `USE_FIXTURE_DATA=1` 使用内置测试文章，不依赖真实 Supab
 app/                 Next.js routes
 src/components/      UI components
 src/lib/             env/auth/html/posts/supabase helpers
+src/lib/recipe-nutrition.ts  recipe calorie estimation helpers
 scripts/migrate/     Linode data migration CLI
 supabase/schema.sql  Supabase schema
 tests/               unit and e2e tests

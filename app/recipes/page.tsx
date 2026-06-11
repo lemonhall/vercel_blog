@@ -83,6 +83,15 @@ function RecipePostTags({ post, selectedTags, query }: { post: PostWithTags; sel
   );
 }
 
+function RecipeNutritionBadge({ post }: { post: PostWithTags }) {
+  if (!post.nutrition) {
+    return null;
+  }
+  const value = post.nutrition.caloriesPerServingKcal ?? post.nutrition.caloriesTotalKcal;
+  const suffix = post.nutrition.caloriesPerServingKcal ? "/份" : "";
+  return <p className="nutrition-badge">约 {value} kcal{suffix}</p>;
+}
+
 export default async function RecipesPage({ searchParams }: RecipesPageProps) {
   const params = await searchParams;
   const currentPage = parsePage(params?.page);
@@ -146,6 +155,7 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
                 <Link href={`/posts/${post.slug}`}>{post.title}</Link>
               </h2>
               <p className="post-meta">{formatDate(post.published_at ?? post.created_at)}</p>
+              <RecipeNutritionBadge post={post} />
               <RecipePostTags post={post} selectedTags={selectedTags} query={query} />
               {post.excerpt ? <p className="post-excerpt">{post.excerpt}</p> : null}
             </article>

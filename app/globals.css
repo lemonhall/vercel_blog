@@ -193,6 +193,13 @@ a {
   margin: 0 0 8px;
 }
 
+.nutrition-badge,
+.nutrition-summary {
+  color: var(--muted);
+  font-size: 13px;
+  margin: -2px 0 8px;
+}
+
 .post-tags {
   display: flex;
   flex-wrap: wrap;
@@ -211,6 +218,18 @@ a {
   line-height: 1.4;
   text-decoration: none;
   overflow-wrap: anywhere;
+}
+
+.nutrition-detail {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.5);
+  margin: 18px 0;
+  padding: 16px 18px;
+}
+
+.nutrition-detail h2 {
+  margin-top: 0;
 }
 
 .post-excerpt {
@@ -404,6 +423,12 @@ a {
   padding: 10px 12px;
   font: inherit;
   background: var(--surface-strong);
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
 .editor {

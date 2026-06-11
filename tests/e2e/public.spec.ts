@@ -101,6 +101,8 @@ test("admin can edit recipe tags and readers can browse recipe tag pages", async
   await page.goto("/admin?edit=beef-and-chickpeas");
   await expect(page.getByLabel("文章类型")).toHaveValue("recipe");
   await expect(page.getByLabel("Tags")).toHaveValue(/牛肉/);
+  await expect(page.getByLabel("AI 估算卡路里")).toBeVisible();
+  await expect(page.getByLabel("已保存卡路里估算")).toContainText("约 450 kcal/份");
 
   await page.getByLabel("Tags").fill("牛肉, 炖菜, 家常菜");
   await page.getByRole("button", { name: "更新" }).click();
@@ -109,8 +111,13 @@ test("admin can edit recipe tags and readers can browse recipe tag pages", async
   await expect(page.getByRole("heading", { name: "食谱", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
   const recipeCard = page.locator(".post-item").filter({ has: page.getByRole("link", { name: "鹰嘴豆炖牛肉" }) });
+  await expect(recipeCard).toContainText("约 450 kcal/份");
   await expect(recipeCard.locator(".post-tags")).toContainText("牛肉");
   await expect(recipeCard.locator(".post-tags")).toContainText("炖菜");
+  await recipeCard.getByRole("link", { name: "鹰嘴豆炖牛肉" }).click();
+  await expect(page.getByRole("region", { name: "卡路里估算" })).toContainText("牛肉");
+  await expect(page.getByRole("region", { name: "卡路里估算" })).toContainText("约 1250 kcal");
+  await page.goto("/recipes");
   await expect(page.getByRole("navigation", { name: "分页" })).toContainText("第 1 / 2 页");
   await expect(page.getByRole("link", { name: "下一页" })).toBeVisible();
   await page.getByLabel("食谱搜索关键词").fill("鹰嘴豆");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteAdminPost, saveAdminPost } from "@/lib/admin-posts";
+import { maybeEstimateAndSaveRecipeNutrition, deleteAdminPost, saveAdminPost } from "@/lib/admin-posts";
 import { createAdminSessionToken, verifyAdminPassword, verifyAdminSessionToken } from "@/lib/auth";
 
 describe("admin auth", () => {
@@ -142,5 +142,110 @@ describe("admin post actions", () => {
       name: "rpc",
       args: ["save_post_tags", { post_slug: "tomato-beef", tag_names: ["牛肉", "炖菜", "法国菜"] }]
     });
+  });
+
+  it("does not estimate calories for ordinary posts or unrequested recipe saves", async () => {
+    const client = {
+      from() {
+        throw new Error("must not write nutrition");
+      },
+      rpc() {
+        throw new Error("must not call nutrition rpc");
+      }
+    };
+    const estimator = async () => {
+      throw new Error("must not call estimator");
+    };
+
+    await maybeEstimateAndSaveRecipeNutrition(
+      {
+        title: "普通文章",
+        slug: "normal-post",
+        contentHtml: "<p>正文</p>",
+        status: "draft",
+        contentKind: "post",
+        tagNames: [],
+        estimateCalories: true
+      },
+      client,
+      estimator
+    );
+    await maybeEstimateAndSaveRecipeNutrition(
+      {
+        title: "番茄炖牛肉",
+        slug: "tomato-beef",
+        contentHtml: "<p>牛肉和番茄慢炖。</p>",
+        status: "published",
+        contentKind: "recipe",
+        tagNames: ["牛肉"],
+        estimateCalories: false
+      },
+      client,
+      estimator
+    );
+  });
+
+  it("estimates recipe calories with GPT-5.5 and persists ingredient details", async () => {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const client = {
+      from() {
+        throw new Error("must use rpc");
+      },
+      rpc(name: string, args: unknown) {
+        calls.push({ name, args });
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+    const estimator = async (input: { title: string; model: string }) => {
+      expect(input.title).toBe("番茄炖牛肉");
+      expect(input.model).toBe("openai/gpt-5.5");
+      return {
+        servings: 4,
+        caloriesTotalKcal: 1800,
+        caloriesPerServingKcal: 450,
+        ingredientEstimates: [{ name: "牛肉", amount: "500g", caloriesKcal: 1250, note: "按 250 kcal/100g 估算" }],
+        confidence: 0.72,
+        needsReview: false,
+        summary: "每份约 450 kcal。",
+        model: "openai/gpt-5.5",
+        promptVersion: "recipe-calorie-v1",
+        sourceHash: "hash-1",
+        rawEstimateJson: { ok: true }
+      };
+    };
+
+    await maybeEstimateAndSaveRecipeNutrition(
+      {
+        title: "番茄炖牛肉",
+        slug: "tomato-beef",
+        contentHtml: "<p>牛肉和番茄慢炖。</p>",
+        status: "published",
+        contentKind: "recipe",
+        tagNames: ["牛肉", "炖菜"],
+        estimateCalories: true
+      },
+      client,
+      estimator
+    );
+
+    expect(calls).toEqual([
+      {
+        name: "save_recipe_nutrition_estimate",
+        args: {
+          post_slug: "tomato-beef",
+          servings: 4,
+          calories_total_kcal: 1800,
+          calories_per_serving_kcal: 450,
+          ingredient_estimates_json: [{ name: "牛肉", amount: "500g", caloriesKcal: 1250, note: "按 250 kcal/100g 估算" }],
+          confidence: 0.72,
+          needs_review: false,
+          summary: "每份约 450 kcal。",
+          model: "openai/gpt-5.5",
+          prompt_version: "recipe-calorie-v1",
+          source_hash: "hash-1",
+          raw_estimate_json: { ok: true }
+        }
+      }
+    ]);
   });
 });
