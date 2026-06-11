@@ -309,6 +309,9 @@ export async function listRecipePostsByTags(tagSlugs: string[], client?: Supabas
   if (slugs.length === 0) {
     return listRecipePosts(client);
   }
+  if (slugs.length === 1) {
+    return listRecipePostsByTag(slugs[0], client);
+  }
 
   if (!client && useFixtureData()) {
     return recipePosts().filter((post) => {
@@ -452,6 +455,27 @@ export async function searchRecipePostsByTagsPage(
   }
   if (slugs.length === 0) {
     return searchRecipePostsPage(q, options, client);
+  }
+  if (slugs.length === 1) {
+    const page = normalizePositiveInteger(options.page, 1);
+    const pageSize = normalizePositiveInteger(options.pageSize, 10);
+    const sort = normalizeSort(options.sort);
+    const from = (page - 1) * pageSize;
+    const matches = sortPosts(
+      (await listRecipePostsByTag(slugs[0], client)).filter(
+        (post) => post.title.includes(q) || post.content_html.includes(q) || (post.excerpt?.includes(q) ?? false)
+      ),
+      sort
+    );
+    const pagePosts = matches.slice(from, from + pageSize);
+    return {
+      posts: await attachTagsToPosts(pagePosts, client),
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(matches.length / pageSize)),
+      total: matches.length,
+      sort
+    };
   }
 
   const page = normalizePositiveInteger(options.page, 1);

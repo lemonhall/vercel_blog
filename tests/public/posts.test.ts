@@ -404,6 +404,49 @@ describe("recipe queries", () => {
     });
   });
 
+  it("keeps single tag recipe filtering on the existing single-tag RPC for production compatibility", async () => {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const post = {
+      id: "recipe-1",
+      legacy_id: 6,
+      title: "鹰嘴豆炖牛肉",
+      slug: "beef-and-chickpeas",
+      content_html: "<p>body</p>",
+      excerpt: null,
+      status: "published" as const,
+      content_kind: "recipe" as const,
+      created_at: "2022-05-23T21:09:02.478Z",
+      updated_at: "2022-05-23T21:24:19.540Z",
+      published_at: "2022-05-23T21:09:02.478Z"
+    };
+    const client = {
+      from() {
+        throw new Error("must use rpc");
+      },
+      rpc(name: string, args?: unknown) {
+        calls.push({ name, args });
+        if (name === "list_recipe_posts_by_tag") {
+          return Promise.resolve({ data: [post], error: null });
+        }
+        if (name === "list_recipe_posts_by_tags") {
+          throw new Error("single tag must not require the new multi-tag RPC");
+        }
+        if (name === "list_tags_for_post") {
+          return Promise.resolve({ data: [{ id: "beef", name: "牛肉", slug: "beef" }], error: null });
+        }
+        throw new Error("unexpected rpc");
+      }
+    };
+
+    const result = await listRecipePostsByTagsPage(["beef"], { page: 1, pageSize: 10 }, client);
+
+    expect(result.posts[0].slug).toBe("beef-and-chickpeas");
+    expect(calls).toContainEqual({
+      name: "list_recipe_posts_by_tag",
+      args: { tag_slug: "beef" }
+    });
+  });
+
   it("searches only published recipes and keeps pagination metadata", async () => {
     const calls: Array<{ name: string; args: unknown[] }> = [];
     const post = {
