@@ -81,14 +81,21 @@ supabase/schema.sql
 
 4. 把 SQL 全部复制到 Supabase SQL Editor。
 5. 点击 **Run**。
-6. 在 **Table Editor** 确认有这三张表：
+6. 在 **Table Editor** 确认有这些表：
    - `posts`
    - `assets`
    - `post_assets`
+   - `tags`
+   - `post_tags`
 7. 在数据库函数里确认有：
    - `search_posts(q text)`
+   - `save_post_tags(...)`
+   - `save_post_tags_for_post(...)`
+   - `list_recipe_tags()`
+   - `list_recipe_posts_by_tag(tag_slug text)`
+   - `list_tags_for_post(target_post_id uuid)`
 
-注意：现在不要用 `refs/lemon_blog/app.db` 做迁移。迁移工作已经全部移到 v2，等 Linode 数据拉下来后再开始。
+注意：不要用旧 `refs/lemon_blog/app.db` 做迁移验收。真实迁移输入源是 `refs/lemon_blog_sync_latest`，执行前先确认 Blob token 和 Supabase secret key 已配置。
 
 ## 本地 .env 配置
 
@@ -188,4 +195,3 @@ http://localhost:3000/admin
 - 不要暴露 `BLOB_READ_WRITE_TOKEN`。
 - publishable key 可以在浏览器使用，但仍然应该通过环境变量管理。
 - 如果 secret 被贴到聊天、日志、git 或公开 issue 里，立刻去 Supabase/Vercel 轮换。
-

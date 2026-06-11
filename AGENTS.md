@@ -4,24 +4,30 @@
 
 本仓库是柠檬叔个人博客的 Vercel 友好重写版。
 
-v1 当前范围：
+当前代码范围已经推进到 v5：
 
-- 建立 Next.js / Supabase / Vercel Blob 应用骨架。
-- 保留 Supabase 空表和 schema。
-- 提供公开阅读页、基础 `ILIKE` 搜索、单人后台编辑和图片上传。
+- v1：Next.js / Supabase / Vercel Blob 应用骨架、公开阅读页、基础 `ILIKE` 搜索、单人后台编辑和图片上传。
+- v2：Linode 真实数据迁移链路，默认输入源为 `refs/lemon_blog_sync_latest`，迁移状态写入 `migration_state/v2-state.json`。
+- v3：公开首页分页、排序、宽模式、footer、前台管理员编辑入口和逻辑删除。
+- v4：TipTap 富文本编辑器升级，支持常用格式、图片、表格、代码块、sticky 工具栏和移动端适配。
+- v5：食谱频道、`content_kind`、`tags` / `post_tags`、食谱 tag 云、tag 过滤页、食谱内搜索和 AI JSONL 标注导入链路。
 
 迁移范围：
 
-- 所有生产迁移工作都属于 v2。
-- 不要把 `refs/lemon_blog/app.db` 当作迁移验收依据。
-- 不要把 `refs/` 当作生产真实数据源。
-- 等 Linode 数据拉到本地后，再启动 v2 迁移。
+- 不要把旧 `refs/lemon_blog/app.db` 当作迁移验收依据。
+- 不要把旧 `refs/` 快照当作生产真实数据源。
+- 真实迁移以 `refs/lemon_blog_sync_latest` 为输入，详见 `docs/plan/v2-index.md`。
+- 上传和导入真实数据前，必须确认 `.env` 中有 `BLOB_READ_WRITE_TOKEN`、`SUPABASE_DEV_URL`、`SUPABASE_DEV_SECRET_KEY`。
+- 食谱初始化标注必须来自 AI 阅读正文后的 JSONL；禁止用关键词规则、正则或纯程序分类替代 AI 判断。
 
 ## 必读文档
 
 - PRD：`docs/prd/PRD-0001-vercel-blog-migration.md`
 - v1 计划：`docs/plan/v1-index.md`
 - v2 迁移计划：`docs/plan/v2-index.md`
+- v3 前台体验计划：`docs/plan/v3-index.md`
+- v4 编辑器计划：`docs/plan/v4-index.md`
+- v5 食谱 tags 计划：`docs/plan/v5-index.md`
 - 环境变量指南：`docs/setup/vercel-supabase-env.md`
 - ECN：`docs/ecn/`
 
@@ -33,12 +39,45 @@ v1 当前范围：
 
 ```powershell
 npm install
+npm run dev
 npm test
+npx tsc --noEmit
 npm run build
 npm run e2e
 ```
 
 E2E 的 fixture 环境变量由 Playwright 配置自动注入。
+
+迁移命令：
+
+```powershell
+npm run migrate -- --dry-run --report-only
+npm run migrate -- --phase upload-assets
+npm run migrate -- --phase import-posts
+npm run migrate -- --phase verify
+```
+
+默认迁移源为 `refs/lemon_blog_sync_latest`。不要对 `refs/` 执行删除、移动或清理，除非用户明确要求。
+
+## 架构入口
+
+- 路由：`app/`，包含 `/`、`/search`、`/posts/[slug]`、`/admin`、`/recipes`、`/recipes/tags/[tag]`。
+- 数据读取：`src/lib/posts.ts`。
+- 后台保存和逻辑删除：`src/lib/admin-posts.ts`。
+- 认证与 session：`src/lib/auth.ts`、`src/lib/admin-session.ts`。
+- HTML 清洗：`src/lib/html.ts`。
+- 富文本编辑器：`src/components/RichTextEditor.tsx`。
+- 迁移计划与状态：`src/lib/migration/`、`scripts/migrate/cli.ts`。
+- 数据库 schema：`supabase/schema.sql`。
+
+核心数据流：
+
+```text
+Next.js route -> src/lib/* -> Supabase RPC/table query -> page render
+Admin form -> app/api/admin/posts -> saveAdminPost -> Supabase posts/tags
+Editor image upload -> app/api/uploads/image -> Vercel Blob -> content_html
+Migration CLI -> Linode snapshot -> Vercel Blob + Supabase -> reports/state
+```
 
 ## Playwright 浏览器
 
@@ -50,18 +89,25 @@ E2E 的 fixture 环境变量由 Playwright 配置自动注入。
 ## 文件与安全
 
 - `refs/` 必须保持 git 忽略。
+- `.env`、`refs/`、`.tmp/`、`.next/`、`test-results/` 都不要提交。
 - 不要提交 `.env`、Supabase secret key、Blob token 或 APNs 密钥。
 - 用户上传不要写入项目文件系统。
 - 运行时图片上传只使用 Vercel Blob。
 - 数据库使用 Supabase Postgres。
+- 删除文章必须是逻辑删除：只把 `posts.status` 改为 `draft`，不得物理删除 `posts` 行。
+- 公开页面渲染 HTML 前必须经过 `sanitizePostHtml` 或等效白名单清洗。
 
 ## 开发纪律
 
 - 按 vN 计划和 Req ID 追溯推进。
 - 优先先写测试，再写实现。
 - 声称代码完成前，至少运行 `npm test` 和 `npm run build`。
+- TypeScript 变更后运行 `npx tsc --noEmit`。
 - 涉及用户流程时运行 `npm run e2e`。
 - 如果 E2E 因本地环境失败，要明确报告失败原因。
+- 修改 Supabase schema 后，同步更新 `tests/foundation/schema.test.ts` 和环境/初始化文档。
+- 修改公开查询、食谱、tags、后台保存或逻辑删除时，优先补 `tests/public/posts.test.ts`、`tests/admin/auth.test.ts` 或 `tests/e2e/public.spec.ts`。
+- 修改迁移逻辑时，补 `tests/migration/migration.test.ts`，并至少跑 `npm test -- tests/migration/migration.test.ts`。
 
 ## 前端风格
 
@@ -74,4 +120,3 @@ E2E 的 fixture 环境变量由 Playwright 配置自动注入。
 - 克制的表面、细线和柔和阴影。
 
 博客首先要好读、耐看，不要做成营销首页。
-
