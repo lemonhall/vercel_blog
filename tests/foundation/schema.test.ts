@@ -30,5 +30,8 @@ describe("Supabase schema", () => {
     expect(schema).toContain("create or replace function public.save_post_tags");
     expect(schema).toContain("create or replace function public.list_recipe_tags");
     expect(schema).toContain("create or replace function public.list_recipe_posts_by_tag");
+    expect(schema).toContain("create or replace function public.list_recipe_posts_by_tags");
+    expect(schema).toContain("create or replace function public.search_recipe_posts_by_tags");
+    expect(schema).toContain("having count(distinct tags.slug) = cardinality(tag_slugs)");
   });
 });

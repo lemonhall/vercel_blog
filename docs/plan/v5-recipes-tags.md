@@ -14,10 +14,11 @@
 
 - Supabase schema 增加 `posts.content_kind`，取值 `post` / `recipe`。
 - 新增 `tags`、`post_tags` 表，支持 tags 多对多关联。
-- 数据层增加食谱列表、tag 云、按 tag 查询、后台文章 tags 读取与保存。
+- 数据层增加食谱列表、tag 云、按 tag 查询、多 tags AND 交集查询、后台文章 tags 读取与保存。
 - 后台编辑页增加文章类型选择和 tags 手工输入。
-- 公开站点新增 `/recipes` 和 `/recipes/tags/<tagSlug>`。
+- 公开站点新增 `/recipes` 和 `/recipes/tags/<tagSlug>`，主筛选状态使用 `/recipes?tags=<slug1>,<slug2>`。
 - tags 云显示已发布食谱下每个 tag 的数量。
+- tags 云支持多选 AND 筛选：点击未选 tag 加入筛选，点击已选 tag 取消筛选，“全部取消”清空所有 tag。
 - 初始化标注链路使用 JSONL：导出候选文章摘要与正文片段，AI 逐批输出 `content_kind` 与 tags，导入脚本幂等写入数据库。
 - AI 标注文件保留在可审计目录，便于人工抽查和修正。
 
@@ -35,9 +36,9 @@
   - `tags.slug unique`
   - `post_tags primary key (post_id, tag_id)`
   - 面向食谱列表和 tag 查询的索引。
-- `npm test -- tests/public/posts.test.ts` 通过，覆盖食谱列表、tag 云、按 tag 查询，并确保草稿和普通文章不泄露。
+- `npm test -- tests/public/posts.test.ts` 通过，覆盖食谱列表、tag 云、按 tag 查询、多 tags AND 查询，并确保草稿和普通文章不泄露。
 - `npm test -- tests/admin/auth.test.ts` 通过，覆盖后台保存文章类型与 tags，重复保存不会产生重复关联。
-- `npm run e2e` 通过，覆盖管理员编辑 tags、打开 `/recipes`、点击 tag 过滤食谱。
+- `npm run e2e` 通过，覆盖管理员编辑 tags、打开 `/recipes`、点击 tag 过滤食谱、多选 tag、取消已选 tag 和全部取消。
 - `npm test -- tests/migration/migration.test.ts` 通过，覆盖 AI JSONL 标注导入幂等、断点续跑、未知 tag 自动 upsert。
 - `npm run build` 通过。
 - 反作弊条款：不得只在前端用字符串过滤食谱；公开食谱查询必须从数据库层按 `content_kind='recipe'` 和 `status='published'` 过滤；AI 初始化不得使用关键词规则冒充内容理解。

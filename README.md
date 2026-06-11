@@ -12,7 +12,7 @@
 - 单人后台登录、TipTap 富文本编辑器、草稿管理、文章保存接口。
 - 公开首页、文章详情页、数据库 `ILIKE` 搜索、分页、排序、宽模式。
 - 前台管理员编辑入口和逻辑删除，删除只把文章降为草稿。
-- `/recipes` 食谱频道、食谱 tags 云、tag 过滤页和食谱内搜索。
+- `/recipes` 食谱频道、食谱 tags 云、tag 多选 AND 过滤和食谱内搜索。
 - 迁移 CLI 支持 Linode 同步快照 inventory、图片上传、文章导入和 dry-run 报告。
 - Playwright fixture 模式，避免 E2E 依赖真实 Supabase。
 
@@ -67,6 +67,8 @@ supabase/schema.sql
 - `save_post_tags(...)`
 - `list_recipe_tags()`
 - `list_recipe_posts_by_tag(tag_slug text)`
+- `list_recipe_posts_by_tags(tag_slugs text[])`
+- `search_recipe_posts_by_tags(q text, tag_slugs text[])`
 - `list_tags_for_post(target_post_id uuid)`
 
 ## 本地开发

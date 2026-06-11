@@ -93,6 +93,8 @@ supabase/schema.sql
    - `save_post_tags_for_post(...)`
    - `list_recipe_tags()`
    - `list_recipe_posts_by_tag(tag_slug text)`
+   - `list_recipe_posts_by_tags(tag_slugs text[])`
+   - `search_recipe_posts_by_tags(q text, tag_slugs text[])`
    - `list_tags_for_post(target_post_id uuid)`
 
 注意：不要用旧 `refs/lemon_blog/app.db` 做迁移验收。真实迁移输入源是 `refs/lemon_blog_sync_latest`，执行前先确认 Blob token 和 Supabase secret key 已配置。

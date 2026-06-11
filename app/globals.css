@@ -151,6 +151,12 @@ a {
   color: var(--accent-ink);
 }
 
+.tag-cloud .clear-tags {
+  border-color: rgba(49, 66, 55, 0.24);
+  color: var(--accent-strong);
+  background: rgba(73, 102, 79, 0.1);
+}
+
 .list-controls .control-active {
   color: var(--accent-ink);
   background: var(--accent);

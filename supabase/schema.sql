@@ -186,6 +186,55 @@ as $$
   order by posts.published_at desc nulls last, posts.created_at desc;
 $$;
 
+create or replace function public.list_recipe_posts_by_tags(tag_slugs text[])
+returns setof public.posts
+language sql
+stable
+as $$
+  with selected_tags as (
+    select distinct trim(value) as slug
+    from unnest(coalesce(tag_slugs, array[]::text[])) as value
+    where length(trim(value)) > 0
+  )
+  select posts.*
+  from public.posts
+  join public.post_tags on post_tags.post_id = posts.id
+  join public.tags on tags.id = post_tags.tag_id
+  where posts.status = 'published'
+    and posts.content_kind = 'recipe'
+    and tags.slug in (select slug from selected_tags)
+  group by posts.id
+  having count(distinct tags.slug) = cardinality(tag_slugs)
+  order by posts.published_at desc nulls last, posts.created_at desc;
+$$;
+
+create or replace function public.search_recipe_posts_by_tags(q text, tag_slugs text[])
+returns setof public.posts
+language sql
+stable
+as $$
+  with selected_tags as (
+    select distinct trim(value) as slug
+    from unnest(coalesce(tag_slugs, array[]::text[])) as value
+    where length(trim(value)) > 0
+  )
+  select posts.*
+  from public.posts
+  join public.post_tags on post_tags.post_id = posts.id
+  join public.tags on tags.id = post_tags.tag_id
+  where posts.status = 'published'
+    and posts.content_kind = 'recipe'
+    and length(trim(q)) > 0
+    and (
+      posts.title ilike '%' || q || '%'
+      or posts.content_html ilike '%' || q || '%'
+    )
+    and tags.slug in (select slug from selected_tags)
+  group by posts.id
+  having count(distinct tags.slug) = cardinality(tag_slugs)
+  order by posts.published_at desc nulls last, posts.created_at desc;
+$$;
+
 create or replace function public.list_tags_for_post(target_post_id uuid)
 returns table(id uuid, name text, slug text)
 language sql

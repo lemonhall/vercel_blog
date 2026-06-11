@@ -121,13 +121,37 @@ test("admin can edit recipe tags and readers can browse recipe tag pages", async
   await page.getByLabel("食谱搜索关键词").fill("第14篇日记");
   await page.getByRole("button", { name: "搜索食谱" }).click();
   await expect(page.getByText("没有找到匹配食谱。")).toBeVisible();
+  await page.goto("/recipes");
   const beefTag = page.locator(".tag-cloud").getByRole("link", { name: "牛肉 1" });
   await expect(beefTag).toBeVisible();
-  await expect(beefTag).toHaveAttribute("href", "/recipes/tags/beef");
+  await expect(beefTag).toHaveAttribute("href", "/recipes?tags=beef");
+  await beefTag.click();
+  await expect(page).toHaveURL(/\/recipes\?tags=beef/);
+  await expect(page.locator(".tag-cloud").getByRole("link", { name: "牛肉 1" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("link", { name: "全部取消" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
+
+  await page.locator(".tag-cloud").getByRole("link", { name: "炖菜 1" }).click();
+  await expect(page).toHaveURL(/\/recipes\?tags=beef%2Cstew/);
+  await expect(page.locator(".tag-cloud").getByRole("link", { name: "牛肉 1" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".tag-cloud").getByRole("link", { name: "炖菜 1" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("link", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "测试食谱 1" })).toHaveCount(0);
+
+  await page.locator(".tag-cloud").getByRole("link", { name: "炖菜 1" }).click();
+  await expect(page).toHaveURL(/\/recipes\?tags=beef/);
+  await expect(page.locator(".tag-cloud").getByRole("link", { name: "炖菜 1" })).toHaveAttribute("aria-pressed", "false");
+  await page.locator(".tag-cloud").getByRole("link", { name: "牛肉 1" }).click();
+  await expect(page).toHaveURL(/\/recipes$/);
+  await expect(page.getByRole("link", { name: "全部取消" })).toHaveCount(0);
+
+  await page.goto("/recipes?tags=beef,stew");
+  await page.getByRole("link", { name: "全部取消" }).click();
+  await expect(page).toHaveURL(/\/recipes$/);
 
   await page.goto("/recipes/tags/beef");
-  await expect(page).toHaveURL(/\/recipes\/tags\/beef/);
-  await expect(page.getByRole("heading", { name: "牛肉", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/recipes\?tags=beef/);
+  await expect(page.getByRole("heading", { name: "食谱", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
 });
 

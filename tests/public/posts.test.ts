@@ -7,7 +7,9 @@ import {
   listRecipePosts,
   listRecipePostsPage,
   listRecipePostsByTag,
+  listRecipePostsByTagsPage,
   listRecipeTags,
+  searchRecipePostsByTagsPage,
   searchRecipePostsPage,
   searchPosts
 } from "@/lib/posts";
@@ -355,6 +357,53 @@ describe("recipe queries", () => {
     ]);
   });
 
+  it("uses an AND-style tag RPC for multi-tag recipe filtering", async () => {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const post = {
+      id: "recipe-1",
+      legacy_id: 6,
+      title: "鹰嘴豆炖牛肉",
+      slug: "beef-and-chickpeas",
+      content_html: "<p>body</p>",
+      excerpt: null,
+      status: "published" as const,
+      content_kind: "recipe" as const,
+      created_at: "2022-05-23T21:09:02.478Z",
+      updated_at: "2022-05-23T21:24:19.540Z",
+      published_at: "2022-05-23T21:09:02.478Z"
+    };
+    const client = {
+      from() {
+        throw new Error("must use rpc");
+      },
+      rpc(name: string, args?: unknown) {
+        calls.push({ name, args });
+        if (name === "list_recipe_posts_by_tags") {
+          return Promise.resolve({ data: [post], error: null });
+        }
+        if (name === "list_tags_for_post") {
+          return Promise.resolve({
+            data: [
+              { id: "beef", name: "牛肉", slug: "beef" },
+              { id: "stew", name: "炖菜", slug: "stew" }
+            ],
+            error: null
+          });
+        }
+        throw new Error("unexpected rpc");
+      }
+    };
+
+    const result = await listRecipePostsByTagsPage(["beef", "stew"], { page: 1, pageSize: 10 }, client);
+
+    expect(result).toMatchObject({ page: 1, pageSize: 10, pageCount: 1, total: 1 });
+    expect(result.posts[0].slug).toBe("beef-and-chickpeas");
+    expect(calls).toContainEqual({
+      name: "list_recipe_posts_by_tags",
+      args: { tag_slugs: ["beef", "stew"] }
+    });
+  });
+
   it("searches only published recipes and keeps pagination metadata", async () => {
     const calls: Array<{ name: string; args: unknown[] }> = [];
     const post = {
@@ -427,6 +476,46 @@ describe("recipe queries", () => {
     expect(calls).toContainEqual({ name: "eq", args: ["content_kind", "recipe"] });
     expect(calls).toContainEqual({ name: "or", args: ["title.ilike.%牛肉%,content_html.ilike.%牛肉%"] });
     expect(calls.some((call) => call.name === "rpc" && call.args[0] === "search_posts")).toBe(false);
+  });
+
+  it("searches within AND-style selected recipe tags through a database RPC", async () => {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const post = {
+      id: "recipe-1",
+      legacy_id: 6,
+      title: "鹰嘴豆炖牛肉",
+      slug: "beef-and-chickpeas",
+      content_html: "<p>body</p>",
+      excerpt: null,
+      status: "published" as const,
+      content_kind: "recipe" as const,
+      created_at: "2022-05-23T21:09:02.478Z",
+      updated_at: "2022-05-23T21:24:19.540Z",
+      published_at: "2022-05-23T21:09:02.478Z"
+    };
+    const client = {
+      from() {
+        throw new Error("must use rpc");
+      },
+      rpc(name: string, args?: unknown) {
+        calls.push({ name, args });
+        if (name === "search_recipe_posts_by_tags") {
+          return Promise.resolve({ data: [post], error: null });
+        }
+        if (name === "list_tags_for_post") {
+          return Promise.resolve({ data: [{ id: "beef", name: "牛肉", slug: "beef" }], error: null });
+        }
+        throw new Error("unexpected rpc");
+      }
+    };
+
+    const result = await searchRecipePostsByTagsPage("牛肉", ["beef", "stew"], { page: 1, pageSize: 10 }, client);
+
+    expect(result.posts[0].slug).toBe("beef-and-chickpeas");
+    expect(calls).toContainEqual({
+      name: "search_recipe_posts_by_tags",
+      args: { q: "牛肉", tag_slugs: ["beef", "stew"] }
+    });
   });
 });
 

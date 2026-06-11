@@ -104,6 +104,19 @@ function normalizeSort(value: string | undefined): PostSort {
   return value === "asc" ? "asc" : "desc";
 }
 
+function normalizeTagSlugs(values: string[]): string[] {
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+  for (const value of values) {
+    const slug = normalizeRouteSlug(value).trim();
+    if (slug && !seen.has(slug)) {
+      seen.add(slug);
+      slugs.push(slug);
+    }
+  }
+  return slugs;
+}
+
 function sortPosts(posts: Post[], sort: PostSort): Post[] {
   const direction = sort === "asc" ? 1 : -1;
   return [...posts].sort((left, right) => {
@@ -291,6 +304,31 @@ export async function listRecipePostsByTag(tagSlug: string, client?: SupabaseLik
   return (data as Post[] | null) ?? [];
 }
 
+export async function listRecipePostsByTags(tagSlugs: string[], client?: SupabaseLike): Promise<Post[]> {
+  const slugs = normalizeTagSlugs(tagSlugs);
+  if (slugs.length === 0) {
+    return listRecipePosts(client);
+  }
+
+  if (!client && useFixtureData()) {
+    return recipePosts().filter((post) => {
+      const postSlugs = new Set(
+        fixturePostTags.filter((link) => link.postId === post.id).map((link) => tagSlugFromName(link.name))
+      );
+      return slugs.every((slug) => postSlugs.has(slug));
+    });
+  }
+
+  const supabase = resolveClient(client);
+  const result = (await supabase.rpc("list_recipe_posts_by_tags", { tag_slugs: slugs })) as {
+    data: Post[] | null;
+    error: QueryError | null;
+  };
+  const { data, error } = await result;
+  throwIfError(error);
+  return (data as Post[] | null) ?? [];
+}
+
 export async function listRecipePostsByTagPage(
   tagSlug: string,
   options: PostPageOptions = {},
@@ -301,6 +339,28 @@ export async function listRecipePostsByTagPage(
   const sort = normalizeSort(options.sort);
   const from = (page - 1) * pageSize;
   const taggedPosts = sortPosts(await listRecipePostsByTag(tagSlug, client), sort);
+  const pagePosts = taggedPosts.slice(from, from + pageSize);
+
+  return {
+    posts: await attachTagsToPosts(pagePosts, client),
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(taggedPosts.length / pageSize)),
+    total: taggedPosts.length,
+    sort
+  };
+}
+
+export async function listRecipePostsByTagsPage(
+  tagSlugs: string[],
+  options: PostPageOptions = {},
+  client?: SupabaseLike
+): Promise<RecipePostPageResult> {
+  const page = normalizePositiveInteger(options.page, 1);
+  const pageSize = normalizePositiveInteger(options.pageSize, 10);
+  const sort = normalizeSort(options.sort);
+  const from = (page - 1) * pageSize;
+  const taggedPosts = sortPosts(await listRecipePostsByTags(tagSlugs, client), sort);
   const pagePosts = taggedPosts.slice(from, from + pageSize);
 
   return {
@@ -375,6 +435,73 @@ export async function searchRecipePostsPage(
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
     total,
+    sort
+  };
+}
+
+export async function searchRecipePostsByTagsPage(
+  query: string,
+  tagSlugs: string[],
+  options: PostPageOptions = {},
+  client?: SupabaseLike
+): Promise<RecipePostPageResult> {
+  const q = query.trim();
+  const slugs = normalizeTagSlugs(tagSlugs);
+  if (!q) {
+    return listRecipePostsByTagsPage(slugs, options, client);
+  }
+  if (slugs.length === 0) {
+    return searchRecipePostsPage(q, options, client);
+  }
+
+  const page = normalizePositiveInteger(options.page, 1);
+  const pageSize = normalizePositiveInteger(options.pageSize, 10);
+  const sort = normalizeSort(options.sort);
+  const from = (page - 1) * pageSize;
+
+  if (!client && useFixtureData()) {
+    const matches = sortPosts(
+      fixturePosts.filter((post) => {
+        if (
+          post.status !== "published" ||
+          post.content_kind !== "recipe" ||
+          !(post.title.includes(q) || post.content_html.includes(q) || (post.excerpt?.includes(q) ?? false))
+        ) {
+          return false;
+        }
+        const postSlugs = new Set(
+          fixturePostTags.filter((link) => link.postId === post.id).map((link) => tagSlugFromName(link.name))
+        );
+        return slugs.every((slug) => postSlugs.has(slug));
+      }),
+      sort
+    );
+    const pagePosts = matches.slice(from, from + pageSize);
+    return {
+      posts: await attachTagsToPosts(pagePosts),
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(matches.length / pageSize)),
+      total: matches.length,
+      sort
+    };
+  }
+
+  const supabase = resolveClient(client);
+  const result = (await supabase.rpc("search_recipe_posts_by_tags", { q, tag_slugs: slugs })) as {
+    data: Post[] | null;
+    error: QueryError | null;
+  };
+  const { data, error } = await result;
+  throwIfError(error);
+  const posts = sortPosts(data ?? [], sort);
+  const pagePosts = posts.slice(from, from + pageSize);
+  return {
+    posts: await attachTagsToPosts(pagePosts, client),
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(posts.length / pageSize)),
+    total: posts.length,
     sort
   };
 }
