@@ -40,6 +40,8 @@
 ```powershell
 npm install
 npm run dev
+npm run vercel -- --version
+supabase --version
 npm test
 npx tsc --noEmit
 npm run build
@@ -58,6 +60,14 @@ npm run migrate -- --phase verify
 ```
 
 默认迁移源为 `refs/lemon_blog_sync_latest`。不要对 `refs/` 执行删除、移动或清理，除非用户明确要求。
+
+CLI 工具：
+
+- Supabase CLI 在 Windows 上通过 Scoop 安装，直接用 `supabase ...`。
+- Vercel CLI 是项目 devDependency，通过 `npm run vercel -- ...` 调用。
+- 登录类命令会打开浏览器授权，不要要求用户把账号密码或 token 发到聊天里。
+- 当前 Supabase 项目 ref 是 `zlscvciucppvsrorwzjt`；执行远端 schema 可用 `supabase link --project-ref zlscvciucppvsrorwzjt` 后跑 `supabase db query --linked --file supabase/schema.sql`。
+- `.env` 中的 Supabase secret key 不能执行 DDL；schema 变更必须走 SQL Editor、数据库连接串或已登录并 link 的 Supabase CLI。
 
 ## 架构入口
 

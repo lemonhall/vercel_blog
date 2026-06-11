@@ -99,6 +99,16 @@ supabase/schema.sql
 
 注意：不要用旧 `refs/lemon_blog/app.db` 做迁移验收。真实迁移输入源是 `refs/lemon_blog_sync_latest`，执行前先确认 Blob token 和 Supabase secret key 已配置。
 
+也可以用 Supabase CLI 应用同一个 schema：
+
+```powershell
+supabase login
+supabase link --project-ref zlscvciucppvsrorwzjt
+supabase db query --linked --file supabase/schema.sql
+```
+
+`.env` 里的 Supabase secret key 只给应用服务端 API 使用，不能执行 `create table` / `create function` 这类 DDL。schema 变更必须使用 SQL Editor、数据库连接串，或已登录并 link 到项目的 Supabase CLI。
+
 ## 本地 .env 配置
 
 复制示例文件：

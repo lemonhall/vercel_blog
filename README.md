@@ -85,6 +85,36 @@ npm run dev
 - 食谱频道：`http://127.0.0.1:3000/recipes`
 - 后台：`http://127.0.0.1:3000/admin`
 
+## CLI 工具
+
+本机 Windows 下 Supabase CLI 使用 Scoop 安装：
+
+```powershell
+supabase --version
+```
+
+Vercel CLI 作为项目 devDependency 使用：
+
+```powershell
+npm run vercel -- --version
+```
+
+如果需要登录：
+
+```powershell
+supabase login
+npm run vercel -- login
+```
+
+应用 Supabase schema：
+
+```powershell
+supabase link --project-ref zlscvciucppvsrorwzjt
+supabase db query --linked --file supabase/schema.sql
+```
+
+`.env` 里的 Supabase secret key 供应用服务端 API 使用，不能替代数据库 DDL 权限；创建/更新表、索引和 RPC 仍需 SQL Editor、数据库连接串或已登录并 link 的 Supabase CLI。
+
 ## 迁移命令
 
 默认源为 `refs/lemon_blog_sync_latest`，状态写入 `migration_state/v2-state.json`，报告写入 `migration_state/reports/`。

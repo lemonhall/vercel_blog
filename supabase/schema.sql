@@ -204,7 +204,7 @@ as $$
     and posts.content_kind = 'recipe'
     and tags.slug in (select slug from selected_tags)
   group by posts.id
-  having count(distinct tags.slug) = cardinality(tag_slugs)
+  having count(distinct tags.slug) = (select count(*) from selected_tags)
   order by posts.published_at desc nulls last, posts.created_at desc;
 $$;
 
@@ -231,7 +231,7 @@ as $$
     )
     and tags.slug in (select slug from selected_tags)
   group by posts.id
-  having count(distinct tags.slug) = cardinality(tag_slugs)
+  having count(distinct tags.slug) = (select count(*) from selected_tags)
   order by posts.published_at desc nulls last, posts.created_at desc;
 $$;
 
