@@ -330,4 +330,28 @@ describe("admin post actions", () => {
       validateRecipeNutritionJson({ total: 123, food: [] }, { model: "openai/gpt-5.5", sourceHash: "hash-1" })
     ).toThrow("keys=total,food");
   });
+
+  it("salvages correct-key model JSON with weak optional fields", () => {
+    const estimate = validateRecipeNutritionJson(
+      {
+        servings: null,
+        calories_total_kcal: 880,
+        calories_per_serving_kcal: null,
+        ingredient_estimates: [{ name: "豆腐", amount: "300g", calories_kcal: 270, note: "估算" }],
+        confidence: "medium",
+        needs_review: true,
+        summary: ""
+      },
+      { model: "openai/gpt-5.5", sourceHash: "hash-1" }
+    );
+
+    expect(estimate).toMatchObject({
+      servings: 4,
+      caloriesTotalKcal: 880,
+      caloriesPerServingKcal: 220,
+      confidence: 0.5,
+      needsReview: true,
+      summary: "按模型返回的总热量估算，约 4 份，每份约 220 kcal。"
+    });
+  });
 });

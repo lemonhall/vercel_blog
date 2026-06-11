@@ -129,9 +129,31 @@ function confidenceFromUnknown(value: unknown): number {
   return confidence > 1 && confidence <= 100 ? confidence / 100 : confidence;
 }
 
+function normalizeServings(value: unknown): { value: number; inferred: boolean } {
+  const servings = numberFromUnknown(value);
+  if (Number.isFinite(servings) && servings > 0) {
+    return { value: Math.round(servings), inferred: false };
+  }
+  return { value: 4, inferred: true };
+}
+
+function normalizeConfidence(value: unknown): { value: number; inferred: boolean } {
+  const confidence = confidenceFromUnknown(value);
+  if (Number.isFinite(confidence) && confidence >= 0 && confidence <= 1) {
+    return { value: confidence, inferred: false };
+  }
+  return { value: 0.5, inferred: true };
+}
+
 function invalidNutritionJsonError(record: Record<string, unknown>): Error {
   const keys = Object.keys(record).slice(0, 20).join(",");
-  return new Error(`AI calorie estimate returned invalid JSON; keys=${keys || "<none>"}`);
+  const diagnostics = [
+    `servings=${JSON.stringify(record.servings)}`,
+    `calories_total_kcal=${JSON.stringify(record.calories_total_kcal ?? record.total_calories)}`,
+    `confidence=${JSON.stringify(record.confidence)}`,
+    `summary=${JSON.stringify(record.summary ?? record.explanation)}`
+  ].join(" ");
+  return new Error(`AI calorie estimate returned invalid JSON; keys=${keys || "<none>"} ${diagnostics}`);
 }
 
 export function buildRecipeNutritionPrompt(input: RecipeNutritionInput): string {
@@ -150,41 +172,50 @@ export function buildRecipeNutritionPrompt(input: RecipeNutritionInput): string 
 
 export function validateRecipeNutritionJson(raw: unknown, meta: { model: string; sourceHash: string }): RecipeNutritionEstimate {
   const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const servings = numberFromUnknown(record.servings);
+  const servings = normalizeServings(record.servings);
   const caloriesTotalKcal = numberFromUnknown(
     record.calories_total_kcal ?? record.caloriesTotalKcal ?? record.total_calories ?? record.totalCalories
   );
-  const caloriesPerServingKcal = numberFromUnknown(
+  const rawCaloriesPerServingKcal = numberFromUnknown(
     record.calories_per_serving_kcal ??
       record.caloriesPerServingKcal ??
       record.per_serving_calories ??
       record.perServingCalories
   );
-  const confidence = confidenceFromUnknown(record.confidence);
+  const caloriesPerServingKcal =
+    Number.isFinite(rawCaloriesPerServingKcal) && rawCaloriesPerServingKcal > 0
+      ? rawCaloriesPerServingKcal
+      : caloriesTotalKcal / servings.value;
+  const confidence = normalizeConfidence(record.confidence);
   const ingredientEstimates = normalizeIngredientEstimates(
     record.ingredient_estimates ?? record.ingredientEstimates ?? record.ingredients
   );
-  const summary = String(record.summary ?? record.explanation ?? record.notes ?? "").trim();
+  const roundedPerServing =
+    Number.isFinite(caloriesPerServingKcal) && caloriesPerServingKcal > 0 ? Math.round(caloriesPerServingKcal) : null;
+  const summary =
+    String(record.summary ?? record.explanation ?? record.notes ?? "").trim() ||
+    (Number.isFinite(caloriesTotalKcal) && caloriesTotalKcal > 0 && roundedPerServing
+      ? `按模型返回的总热量估算，约 ${servings.value} 份，每份约 ${roundedPerServing} kcal。`
+      : "");
   if (
-    !Number.isFinite(servings) ||
-    servings <= 0 ||
     !Number.isFinite(caloriesTotalKcal) ||
     caloriesTotalKcal <= 0 ||
-    !Number.isFinite(confidence) ||
-    confidence < 0 ||
-    confidence > 1 ||
     !summary
   ) {
     throw invalidNutritionJsonError(record);
   }
   return {
-    servings: Math.round(servings),
+    servings: servings.value,
     caloriesTotalKcal: Math.round(caloriesTotalKcal),
-    caloriesPerServingKcal:
-      Number.isFinite(caloriesPerServingKcal) && caloriesPerServingKcal > 0 ? Math.round(caloriesPerServingKcal) : null,
+    caloriesPerServingKcal: roundedPerServing,
     ingredientEstimates,
-    confidence,
-    needsReview: Boolean(record.needs_review ?? record.needsReview) || ingredientEstimates.length === 0,
+    confidence: confidence.value,
+    needsReview:
+      Boolean(record.needs_review ?? record.needsReview) ||
+      ingredientEstimates.length === 0 ||
+      servings.inferred ||
+      confidence.inferred ||
+      !(Number.isFinite(rawCaloriesPerServingKcal) && rawCaloriesPerServingKcal > 0),
     summary,
     model: meta.model,
     promptVersion: RECIPE_CALORIE_PROMPT_VERSION,
