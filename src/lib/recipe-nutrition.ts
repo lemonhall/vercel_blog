@@ -56,16 +56,16 @@ export function normalizeIngredientEstimates(value: unknown): IngredientCalorieE
   const estimates: IngredientCalorieEstimate[] = [];
   for (const item of value) {
       const record = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-      const calories = Number(record.caloriesKcal ?? record.calories_kcal);
+      const calories = numberFromUnknown(record.caloriesKcal ?? record.calories_kcal ?? record.calories ?? record.kcal);
       const name = String(record.name ?? "").trim();
       if (!name || !Number.isFinite(calories) || calories <= 0) {
         continue;
       }
       estimates.push({
         name,
-        amount: record.amount === undefined ? undefined : String(record.amount),
+        amount: record.amount === undefined && record.quantity === undefined ? undefined : String(record.amount ?? record.quantity),
         caloriesKcal: Math.round(calories),
-        note: record.note === undefined ? undefined : String(record.note)
+        note: record.note === undefined && record.notes === undefined ? undefined : String(record.note ?? record.notes)
       });
   }
   return estimates;
@@ -110,6 +110,30 @@ export function sourceHashForRecipeNutrition(input: RecipeNutritionInput): strin
     .digest("hex");
 }
 
+function numberFromUnknown(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const match = value.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : Number.NaN;
+  }
+  return Number(value);
+}
+
+function confidenceFromUnknown(value: unknown): number {
+  const confidence = numberFromUnknown(value);
+  if (!Number.isFinite(confidence)) {
+    return Number.NaN;
+  }
+  return confidence > 1 && confidence <= 100 ? confidence / 100 : confidence;
+}
+
+function invalidNutritionJsonError(record: Record<string, unknown>): Error {
+  const keys = Object.keys(record).slice(0, 20).join(",");
+  return new Error(`AI calorie estimate returned invalid JSON; keys=${keys || "<none>"}`);
+}
+
 export function buildRecipeNutritionPrompt(input: RecipeNutritionInput): string {
   const contentText = excerptFromHtml(input.contentHtml, 6000);
   return [
@@ -126,12 +150,21 @@ export function buildRecipeNutritionPrompt(input: RecipeNutritionInput): string 
 
 export function validateRecipeNutritionJson(raw: unknown, meta: { model: string; sourceHash: string }): RecipeNutritionEstimate {
   const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const servings = Number(record.servings);
-  const caloriesTotalKcal = Number(record.calories_total_kcal ?? record.caloriesTotalKcal);
-  const caloriesPerServingKcal = Number(record.calories_per_serving_kcal ?? record.caloriesPerServingKcal);
-  const confidence = Number(record.confidence);
-  const ingredientEstimates = normalizeIngredientEstimates(record.ingredient_estimates ?? record.ingredientEstimates);
-  const summary = String(record.summary ?? "").trim();
+  const servings = numberFromUnknown(record.servings);
+  const caloriesTotalKcal = numberFromUnknown(
+    record.calories_total_kcal ?? record.caloriesTotalKcal ?? record.total_calories ?? record.totalCalories
+  );
+  const caloriesPerServingKcal = numberFromUnknown(
+    record.calories_per_serving_kcal ??
+      record.caloriesPerServingKcal ??
+      record.per_serving_calories ??
+      record.perServingCalories
+  );
+  const confidence = confidenceFromUnknown(record.confidence);
+  const ingredientEstimates = normalizeIngredientEstimates(
+    record.ingredient_estimates ?? record.ingredientEstimates ?? record.ingredients
+  );
+  const summary = String(record.summary ?? record.explanation ?? record.notes ?? "").trim();
   if (
     !Number.isFinite(servings) ||
     servings <= 0 ||
@@ -142,7 +175,7 @@ export function validateRecipeNutritionJson(raw: unknown, meta: { model: string;
     confidence > 1 ||
     !summary
   ) {
-    throw new Error("AI calorie estimate returned invalid JSON");
+    throw invalidNutritionJsonError(record);
   }
   return {
     servings: Math.round(servings),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { maybeEstimateAndSaveRecipeNutrition, deleteAdminPost, saveAdminPost } from "@/lib/admin-posts";
 import { createAdminSessionToken, verifyAdminPassword, verifyAdminSessionToken } from "@/lib/auth";
-import { estimateRecipeNutritionWithGateway } from "@/lib/recipe-nutrition";
+import { estimateRecipeNutritionWithGateway, validateRecipeNutritionJson } from "@/lib/recipe-nutrition";
 
 describe("admin auth", () => {
   it("verifies the configured admin password", () => {
@@ -298,5 +298,36 @@ describe("admin post actions", () => {
         { apiKey: "key", fetchImpl: fetchImpl as typeof fetch }
       )
     ).rejects.toThrow("Unsupported parameter: response_format");
+  });
+
+  it("accepts common model JSON aliases for recipe calories", () => {
+    const estimate = validateRecipeNutritionJson(
+      {
+        servings: "4人份",
+        total_calories: "1800 kcal",
+        per_serving_calories: "450 kcal",
+        ingredients: [{ name: "牛肉", quantity: "500g", calories: "1250 kcal", notes: "按常见热量估算" }],
+        confidence: 72,
+        explanation: "每份约 450 kcal。"
+      },
+      { model: "openai/gpt-5.5", sourceHash: "hash-1" }
+    );
+
+    expect(estimate).toMatchObject({
+      servings: 4,
+      caloriesTotalKcal: 1800,
+      caloriesPerServingKcal: 450,
+      confidence: 0.72,
+      summary: "每份约 450 kcal。"
+    });
+    expect(estimate.ingredientEstimates).toEqual([
+      { name: "牛肉", amount: "500g", caloriesKcal: 1250, note: "按常见热量估算" }
+    ]);
+  });
+
+  it("reports invalid model JSON keys when recipe calorie validation fails", () => {
+    expect(() =>
+      validateRecipeNutritionJson({ total: 123, food: [] }, { model: "openai/gpt-5.5", sourceHash: "hash-1" })
+    ).toThrow("keys=total,food");
   });
 });
