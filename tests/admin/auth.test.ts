@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { maybeEstimateAndSaveRecipeNutrition, deleteAdminPost, saveAdminPost } from "@/lib/admin-posts";
 import { createAdminSessionToken, verifyAdminPassword, verifyAdminSessionToken } from "@/lib/auth";
 import { estimateRecipeNutritionWithGateway, validateRecipeNutritionJson } from "@/lib/recipe-nutrition";
+import { getSiteAccessDecision, verifySiteSessionToken } from "@/lib/site-access";
 
 describe("admin auth", () => {
   it("verifies the configured admin password", () => {
@@ -15,6 +16,60 @@ describe("admin auth", () => {
     expect(verifyAdminSessionToken(token, "cookie-secret", "admin-password")).toBe(true);
     expect(verifyAdminSessionToken(token, "other-secret", "admin-password")).toBe(false);
     expect(verifyAdminSessionToken(token, "cookie-secret", "wrong-password")).toBe(false);
+  });
+
+  it("lets middleware verify the existing admin session cookie without node crypto", async () => {
+    const token = createAdminSessionToken("cookie-secret", "admin-password");
+
+    await expect(
+      verifySiteSessionToken(token, { authCookieSecret: "cookie-secret", adminPassword: "admin-password" })
+    ).resolves.toBe(true);
+    await expect(
+      verifySiteSessionToken(token, { authCookieSecret: "cookie-secret", adminPassword: "wrong-password" })
+    ).resolves.toBe(false);
+    await expect(
+      verifySiteSessionToken(undefined, { authCookieSecret: "cookie-secret", adminPassword: "admin-password" })
+    ).resolves.toBe(false);
+  });
+
+  it("redirects unauthenticated page requests before they reach Supabase-backed pages", async () => {
+    const decision = await getSiteAccessDecision({
+      method: "GET",
+      url: "https://lemonhall.me/recipes?tags=beef",
+      sessionToken: undefined,
+      env: { authCookieSecret: "cookie-secret", adminPassword: "admin-password" }
+    });
+
+    expect(decision).toEqual({
+      action: "redirect",
+      location: "https://lemonhall.me/admin?next=%2Frecipes%3Ftags%3Dbeef"
+    });
+  });
+
+  it("allows login and static assets while rejecting unauthenticated protected APIs", async () => {
+    const env = { authCookieSecret: "cookie-secret", adminPassword: "admin-password" };
+
+    await expect(
+      getSiteAccessDecision({ method: "GET", url: "https://lemonhall.me/admin?next=%2F", sessionToken: undefined, env })
+    ).resolves.toEqual({ action: "allow" });
+    await expect(
+      getSiteAccessDecision({ method: "POST", url: "https://lemonhall.me/api/admin/login", sessionToken: undefined, env })
+    ).resolves.toEqual({ action: "allow" });
+    await expect(
+      getSiteAccessDecision({ method: "GET", url: "https://lemonhall.me/icon.svg", sessionToken: undefined, env })
+    ).resolves.toEqual({ action: "allow" });
+    await expect(
+      getSiteAccessDecision({ method: "POST", url: "https://lemonhall.me/api/uploads/image", sessionToken: undefined, env })
+    ).resolves.toEqual({ action: "unauthorized" });
+  });
+
+  it("allows protected pages when the existing admin session cookie is valid", async () => {
+    const env = { authCookieSecret: "cookie-secret", adminPassword: "admin-password" };
+    const token = createAdminSessionToken(env.authCookieSecret, env.adminPassword);
+
+    await expect(
+      getSiteAccessDecision({ method: "GET", url: "https://lemonhall.me/posts/first-note", sessionToken: token, env })
+    ).resolves.toEqual({ action: "allow" });
   });
 });
 

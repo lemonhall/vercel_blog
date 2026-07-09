@@ -1,7 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("public reader can browse and search posts", async ({ page }) => {
+async function unlockSite(page: Page, next = "/") {
+  await page.goto(`/admin?next=${encodeURIComponent(next)}`);
+  await page.getByLabel("后台密码").fill("secret");
+  await page.getByRole("button", { name: "登录" }).click();
+}
+
+test("private reader can unlock the site and browse and search posts", async ({ page }) => {
   await page.goto("/");
+  await expect(page).toHaveURL(/\/admin\?next=%2F$/);
+  await page.getByLabel("后台密码").fill("secret");
+  await page.getByRole("button", { name: "登录" }).click();
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "文章" })).toBeVisible();
   await expect(page.getByRole("link", { name: "第14篇日记", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "🍋 柠檬叔的博客" })).toBeVisible();
@@ -13,8 +23,8 @@ test("public reader can browse and search posts", async ({ page }) => {
   await page.getByRole("link", { name: "旧到新" }).click();
   await expect(page.getByRole("link", { name: "第一篇日记", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "下一页" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "编辑 第一篇日记" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "删除 第一篇日记" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "编辑 第一篇日记" })).toHaveAttribute("href", /\/admin\?edit=first-note/);
+  await expect(page.getByRole("button", { name: "删除 第一篇日记" })).toBeVisible();
 
   await page.getByRole("link", { name: "搜索" }).click();
   await page.getByLabel("搜索关键词").fill("牛肉");
@@ -24,13 +34,17 @@ test("public reader can browse and search posts", async ({ page }) => {
   await page.getByRole("link", { name: "鹰嘴豆炖牛肉" }).click();
   await expect(page.getByRole("heading", { name: "鹰嘴豆炖牛肉" })).toBeVisible();
   await expect(page.locator(".article-body img")).toHaveAttribute("src", "https://assets.example/beef.jpg");
-  await expect(page.getByRole("link", { name: "编辑 鹰嘴豆炖牛肉" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "删除 鹰嘴豆炖牛肉" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "编辑 鹰嘴豆炖牛肉" })).toHaveAttribute(
+    "href",
+    /\/admin\?edit=beef-and-chickpeas/
+  );
+  await expect(page.getByRole("button", { name: "删除 鹰嘴豆炖牛肉" })).toBeVisible();
 });
 
 test("mobile public list wraps long titles and excerpts without horizontal scrolling", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await unlockSite(page);
+  await expect(page.getByRole("heading", { name: "文章" })).toBeVisible();
 
   await page.locator(".post-item").first().evaluate((item) => {
     const title = item.querySelector("h2 a");
