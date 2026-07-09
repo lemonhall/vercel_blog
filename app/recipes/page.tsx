@@ -2,15 +2,11 @@ import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  listRecipePostsByTagsPage,
-  listRecipePostsPage,
-  listRecipeTags,
-  searchRecipePostsByTagsPage,
-  searchRecipePostsPage,
   type PostSort,
   type PostWithTags,
   type RecipeTag
 } from "@/lib/posts";
+import { listRecipePostsPageCached, listRecipeTagsCached } from "@/lib/public-posts";
 import {
   normalizeRecipeTags,
   recipeHref,
@@ -85,12 +81,10 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
   let tags: RecipeTag[] = [];
   let setupError = false;
   try {
-    const postsPromise = query.trim()
-      ? searchRecipePostsByTagsPage(query, selectedTags, { page: currentPage, pageSize: 10 })
-      : selectedTags.length > 0
-        ? listRecipePostsByTagsPage(selectedTags, { page: currentPage, pageSize: 10 })
-      : listRecipePostsPage({ page: currentPage, pageSize: 10 });
-    [result, tags] = await Promise.all([postsPromise, listRecipeTags()]);
+    [result, tags] = await Promise.all([
+      listRecipePostsPageCached(query, selectedTags, { page: currentPage, pageSize: 10 }),
+      listRecipeTagsCached()
+    ]);
   } catch {
     setupError = true;
   }

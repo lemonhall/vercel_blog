@@ -13,6 +13,7 @@ import {
 import { useFixtureData } from "@/lib/fixture-data";
 import { parseTagInput } from "@/lib/tags";
 import { estimateRecipeNutritionWithGateway } from "@/lib/recipe-nutrition";
+import { invalidatePostCaches } from "@/lib/cache-invalidation";
 
 async function requireAdmin(): Promise<boolean> {
   const env = getServerEnv();
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = createSupabaseServiceClient();
+  let postSaved = useFixtureData();
   try {
     if (!useFixtureData()) {
       const env = getServerEnv();
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
         { id: id || undefined, title, slug, contentHtml, status, contentKind, tagNames },
         supabase as unknown as AdminPostClient
       );
+      postSaved = true;
       await maybeEstimateAndSaveRecipeNutrition(
         { id: id || undefined, title, slug, contentHtml, status, contentKind, tagNames, estimateCalories },
         supabase as unknown as AdminPostClient,
@@ -59,8 +62,13 @@ export async function POST(request: Request) {
       );
     }
   } catch (error) {
+    if (postSaved) {
+      invalidatePostCaches(slug);
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Save failed" }, { status: 500 });
   }
+
+  invalidatePostCaches(slug);
 
   return NextResponse.redirect(new URL(`/posts/${slug}`, request.url), 303);
 }
