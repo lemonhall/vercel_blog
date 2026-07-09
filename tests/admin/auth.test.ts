@@ -46,6 +46,18 @@ describe("admin auth", () => {
     });
   });
 
+  it("forbids known crawlers without redirecting them to the dynamic login page", async () => {
+    const decision = await getSiteAccessDecision({
+      method: "GET",
+      url: "https://lemonhall.me/recipes?tags=beef,stew",
+      userAgent: "Mozilla/5.0 compatible; OAI-SearchBot/1.0",
+      sessionToken: undefined,
+      env: { authCookieSecret: "cookie-secret", adminPassword: "admin-password" }
+    });
+
+    expect(decision).toEqual({ action: "forbidden" });
+  });
+
   it("allows login and static assets while rejecting unauthenticated protected APIs", async () => {
     const env = { authCookieSecret: "cookie-secret", adminPassword: "admin-password" };
 

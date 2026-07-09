@@ -6,16 +6,20 @@ export type SiteAccessEnv = {
 export type SiteAccessDecision =
   | { action: "allow" }
   | { action: "redirect"; location: string }
-  | { action: "unauthorized" };
+  | { action: "unauthorized" }
+  | { action: "forbidden" };
 
 export type SiteAccessDecisionInput = {
   method: string;
   url: string;
+  userAgent?: string;
   sessionToken: string | undefined;
   env: SiteAccessEnv;
 };
 
 const PUBLIC_FILE_PATTERN = /\.(?:avif|css|gif|ico|jpg|jpeg|js|map|png|svg|txt|webmanifest|woff2?)$/i;
+const CRAWLER_USER_AGENT =
+  /(?:GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|anthropic-ai|Google-Extended|Bytespider|PerplexityBot|Amazonbot)/i;
 
 function bytesToHex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes))
@@ -68,6 +72,10 @@ function redirectToLogin(url: URL): SiteAccessDecision {
   return { action: "redirect", location: loginUrl.toString() };
 }
 
+export function isKnownCrawler(userAgent: string | undefined): boolean {
+  return CRAWLER_USER_AGENT.test(userAgent ?? "");
+}
+
 export async function getSiteAccessDecision(input: SiteAccessDecisionInput): Promise<SiteAccessDecision> {
   const url = new URL(input.url);
   if (isAlwaysAllowedPath(url.pathname)) {
@@ -75,6 +83,9 @@ export async function getSiteAccessDecision(input: SiteAccessDecisionInput): Pro
   }
   if (await verifySiteSessionToken(input.sessionToken, input.env)) {
     return { action: "allow" };
+  }
+  if (isKnownCrawler(input.userAgent)) {
+    return { action: "forbidden" };
   }
   if (url.pathname.startsWith("/api/")) {
     return { action: "unauthorized" };

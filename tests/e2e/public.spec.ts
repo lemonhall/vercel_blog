@@ -6,6 +6,18 @@ async function unlockSite(page: Page, next = "/") {
   await page.getByRole("button", { name: "登录" }).click();
 }
 
+test("crawler requests stop before login and robots disallows private pages", async ({ request }) => {
+  const crawlerResponse = await request.get("/recipes", {
+    headers: { "user-agent": "OAI-SearchBot/1.0" },
+    maxRedirects: 0
+  });
+  expect(crawlerResponse.status()).toBe(403);
+
+  const robotsResponse = await request.get("/robots.txt");
+  expect(robotsResponse.status()).toBe(200);
+  await expect(robotsResponse.text()).resolves.toContain("Disallow: /");
+});
+
 test("private reader can unlock the site and browse and search posts", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/admin\?next=%2F$/);
