@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { sanitizePostHtml } from "@/lib/html";
+import { normalizeRecipeTags, recipeHref, recipeIndexPolicy } from "@/lib/recipe-filters";
 import {
   getPostBySlug,
   getPostWithNutritionBySlug,
@@ -14,6 +15,32 @@ import {
   searchRecipePostsPage,
   searchPosts
 } from "@/lib/posts";
+
+describe("recipe filters", () => {
+  it("normalizes repeated mixed-format tags into one stable sorted set", () => {
+    expect(normalizeRecipeTags(["stew,beef", "beef", "  seafood  ", ""])).toEqual([
+      "beef",
+      "seafood",
+      "stew"
+    ]);
+  });
+
+  it("builds one canonical URL for equivalent tag selections", () => {
+    expect(recipeHref({ query: "", tags: ["stew", "beef", "stew"] })).toBe("/recipes?tags=beef%2Cstew");
+    expect(recipeHref({ query: "", tags: ["beef", "stew"] })).toBe("/recipes?tags=beef%2Cstew");
+  });
+
+  it("marks search, multi-tag, and later pages noindex while preserving a stable canonical", () => {
+    expect(recipeIndexPolicy({ page: 1, query: "", tags: ["beef"] })).toEqual({
+      canonical: "/recipes?tags=beef",
+      noindex: false
+    });
+    expect(recipeIndexPolicy({ page: 2, query: "soup", tags: ["stew", "beef"] })).toEqual({
+      canonical: "/recipes",
+      noindex: true
+    });
+  });
+});
 
 describe("sanitizePostHtml", () => {
   it("removes script tags and event handlers while keeping article markup", () => {

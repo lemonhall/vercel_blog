@@ -120,6 +120,7 @@ a {
 
 .list-controls a,
 .tag-cloud a,
+.tag-cloud label,
 .pagination a,
 .pagination span {
   border: 1px solid var(--line);
@@ -131,15 +132,32 @@ a {
   font-size: 14px;
 }
 
-.tag-cloud a {
+.tag-cloud a,
+.tag-cloud label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.tag-cloud span {
+.tag-cloud label > span:last-child {
   color: var(--accent);
   font-size: 12px;
+}
+
+.tag-cloud {
+  border: 0;
+  padding: 0;
+}
+
+.tag-cloud legend {
+  width: 100%;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tag-cloud input {
+  accent-color: var(--accent-strong);
 }
 
 .tag-cloud .tag-active {
@@ -151,10 +169,34 @@ a {
   color: var(--accent-ink);
 }
 
-.tag-cloud .clear-tags {
+.tag-filter-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -10px 0 20px;
+}
+
+.tag-filter-actions button,
+.tag-filter-actions .clear-tags {
+  min-height: 38px;
+  border: 1px solid rgba(49, 66, 55, 0.24);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font: inherit;
+}
+
+.tag-filter-actions button {
+  color: var(--accent-ink);
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.tag-filter-actions .clear-tags {
   border-color: rgba(49, 66, 55, 0.24);
   color: var(--accent-strong);
   background: rgba(73, 102, 79, 0.1);
+  text-decoration: none;
 }
 
 .list-controls .control-active {
