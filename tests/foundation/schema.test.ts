@@ -46,4 +46,22 @@ describe("Supabase schema", () => {
     expect(schema).toContain("create or replace function public.save_recipe_nutrition_estimate");
     expect(schema).toContain("create or replace function public.list_recipe_nutrition_estimate");
   });
+
+  it("defines one bounded recipe page RPC with a list-only return projection", () => {
+    const start = schema.indexOf("create or replace function public.list_recipe_posts_page");
+    const end = schema.indexOf("create or replace function", start + 1);
+    const recipePageFunction = schema.slice(start, end < 0 ? undefined : end);
+    const returnProjection = recipePageFunction.slice(
+      recipePageFunction.indexOf("returns table"),
+      recipePageFunction.indexOf("language sql")
+    );
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(recipePageFunction).toContain("count(*) over()");
+    expect(recipePageFunction).toContain("greatest(1, least(coalesce(page_limit, 10), 50))");
+    expect(recipePageFunction).toContain("not exists");
+    expect(returnProjection).not.toContain("content_html");
+    expect(returnProjection).not.toContain("ingredient_estimates_json");
+    expect(returnProjection).not.toContain("raw_estimate_json");
+  });
 });

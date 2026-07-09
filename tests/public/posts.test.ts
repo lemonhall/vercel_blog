@@ -149,7 +149,13 @@ describe("listPublishedPostsPage", () => {
     const result = await listPublishedPostsPage({ page: 2, pageSize: 10, sort: "asc" }, client);
 
     expect(result).toMatchObject({ page: 2, pageSize: 10, pageCount: 5, total: 42, sort: "asc" });
-    expect(calls).toContainEqual({ name: "select", args: ["*", { count: "exact" }] });
+    expect(calls).toContainEqual({
+      name: "select",
+      args: [
+        "id,legacy_id,title,slug,excerpt,status,content_kind,created_at,updated_at,published_at",
+        { count: "exact" }
+      ]
+    });
     expect(calls).toContainEqual({ name: "order", args: ["published_at", { ascending: true, nullsFirst: false }] });
     expect(calls).toContainEqual({ name: "range", args: [10, 19] });
   });
@@ -343,9 +349,18 @@ describe("recipe queries", () => {
       },
       rpc(name: string, args?: unknown) {
         calls.push({ name: "rpc", args: [name, args] });
-        if (name === "list_tags_for_post") {
+        if (name === "list_recipe_posts_page") {
           return Promise.resolve({
-            data: [{ id: "beef", name: "牛肉", slug: "beef" }],
+            data: [
+              {
+                ...recipePost,
+                tags: [{ id: "beef", name: "牛肉", slug: "beef" }],
+                servings: null,
+                calories_total_kcal: null,
+                calories_per_serving_kcal: null,
+                total_count: 21
+              }
+            ],
             error: null
           });
         }
@@ -357,11 +372,93 @@ describe("recipe queries", () => {
 
     expect(result).toMatchObject({ page: 2, pageSize: 10, pageCount: 3, total: 21 });
     expect(result.posts[0].tags).toEqual([{ id: "beef", name: "牛肉", slug: "beef" }]);
-    expect(calls).toContainEqual({ name: "select", args: ["*", { count: "exact" }] });
-    expect(calls).toContainEqual({ name: "eq", args: ["status", "published"] });
-    expect(calls).toContainEqual({ name: "eq", args: ["content_kind", "recipe"] });
-    expect(calls).toContainEqual({ name: "range", args: [10, 19] });
-    expect(calls).toContainEqual({ name: "rpc", args: ["list_tags_for_post", { target_post_id: "recipe-1" }] });
+    expect(calls).toEqual([
+      {
+        name: "rpc",
+        args: [
+          "list_recipe_posts_page",
+          {
+            query_text: "",
+            tag_slugs: [],
+            page_offset: 10,
+            page_limit: 10,
+            sort_ascending: false
+          }
+        ]
+      }
+    ]);
+  });
+
+  it("uses one bounded recipe page RPC for search, tags, pagination, and compact nutrition", async () => {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const client = {
+      from() {
+        throw new Error("recipe pages must not use table queries");
+      },
+      rpc(name: string, args?: unknown) {
+        calls.push({ name, args });
+        if (name !== "list_recipe_posts_page") {
+          throw new Error(`unexpected rpc ${name}`);
+        }
+        return Promise.resolve({
+          data: [
+            {
+              id: "recipe-1",
+              legacy_id: 6,
+              title: "鹰嘴豆炖牛肉",
+              slug: "beef-and-chickpeas",
+              excerpt: "牛肉和鹰嘴豆",
+              status: "published",
+              content_kind: "recipe",
+              created_at: "2022-05-23T21:09:02.478Z",
+              updated_at: "2022-05-23T21:24:19.540Z",
+              published_at: "2022-05-23T21:09:02.478Z",
+              tags: [
+                { id: "beef", name: "牛肉", slug: "beef" },
+                { id: "stew", name: "炖菜", slug: "stew" }
+              ],
+              servings: 4,
+              calories_total_kcal: 1800,
+              calories_per_serving_kcal: 450,
+              total_count: 21
+            }
+          ],
+          error: null
+        });
+      }
+    };
+
+    const result = await searchRecipePostsByTagsPage(
+      "牛肉",
+      ["stew", "beef", "stew"],
+      { page: 2, pageSize: 10 },
+      client
+    );
+
+    expect(calls).toEqual([
+      {
+        name: "list_recipe_posts_page",
+        args: {
+          query_text: "牛肉",
+          tag_slugs: ["beef", "stew"],
+          page_offset: 10,
+          page_limit: 10,
+          sort_ascending: false
+        }
+      }
+    ]);
+    expect(result).toMatchObject({ page: 2, pageSize: 10, pageCount: 3, total: 21 });
+    expect(result.posts[0]).toMatchObject({
+      slug: "beef-and-chickpeas",
+      tags: [
+        { id: "beef", name: "牛肉", slug: "beef" },
+        { id: "stew", name: "炖菜", slug: "stew" }
+      ],
+      nutrition: { servings: 4, caloriesTotalKcal: 1800, caloriesPerServingKcal: 450 }
+    });
+    expect(result.posts[0]).not.toHaveProperty("content_html");
+    expect(result.posts[0].nutrition).not.toHaveProperty("ingredientEstimates");
+    expect(result.posts[0].nutrition).not.toHaveProperty("rawEstimateJson");
   });
 
   it("loads recipe tag cloud and tag-filtered recipes through stable RPC contracts", async () => {
@@ -406,15 +503,19 @@ describe("recipe queries", () => {
       },
       rpc(name: string, args?: unknown) {
         calls.push({ name, args });
-        if (name === "list_recipe_posts_by_tags") {
-          return Promise.resolve({ data: [recipePost], error: null });
-        }
-        if (name === "list_tags_for_post") {
+        if (name === "list_recipe_posts_page") {
           return Promise.resolve({
-            data: [
-              { id: "beef", name: "牛肉", slug: "beef" },
-              { id: "stew", name: "炖菜", slug: "stew" }
-            ],
+            data: [{
+              ...recipePost,
+              tags: [
+                { id: "beef", name: "牛肉", slug: "beef" },
+                { id: "stew", name: "炖菜", slug: "stew" }
+              ],
+              servings: null,
+              calories_total_kcal: null,
+              calories_per_serving_kcal: null,
+              total_count: 1
+            }],
             error: null
           });
         }
@@ -427,12 +528,18 @@ describe("recipe queries", () => {
     expect(result).toMatchObject({ page: 1, pageSize: 10, pageCount: 1, total: 1 });
     expect(result.posts[0].slug).toBe("beef-and-chickpeas");
     expect(calls).toContainEqual({
-      name: "list_recipe_posts_by_tags",
-      args: { tag_slugs: ["beef", "stew"] }
+      name: "list_recipe_posts_page",
+      args: {
+        query_text: "",
+        tag_slugs: ["beef", "stew"],
+        page_offset: 0,
+        page_limit: 10,
+        sort_ascending: false
+      }
     });
   });
 
-  it("keeps single tag recipe filtering on the existing single-tag RPC for production compatibility", async () => {
+  it("keeps single tag recipe filtering on the bounded page RPC", async () => {
     const calls: Array<{ name: string; args: unknown }> = [];
     const post = {
       id: "recipe-1",
@@ -453,14 +560,18 @@ describe("recipe queries", () => {
       },
       rpc(name: string, args?: unknown) {
         calls.push({ name, args });
-        if (name === "list_recipe_posts_by_tag") {
-          return Promise.resolve({ data: [post], error: null });
-        }
-        if (name === "list_recipe_posts_by_tags") {
-          throw new Error("single tag must not require the new multi-tag RPC");
-        }
-        if (name === "list_tags_for_post") {
-          return Promise.resolve({ data: [{ id: "beef", name: "牛肉", slug: "beef" }], error: null });
+        if (name === "list_recipe_posts_page") {
+          return Promise.resolve({
+            data: [{
+              ...post,
+              tags: [{ id: "beef", name: "牛肉", slug: "beef" }],
+              servings: null,
+              calories_total_kcal: null,
+              calories_per_serving_kcal: null,
+              total_count: 1
+            }],
+            error: null
+          });
         }
         throw new Error("unexpected rpc");
       }
@@ -470,8 +581,14 @@ describe("recipe queries", () => {
 
     expect(result.posts[0].slug).toBe("beef-and-chickpeas");
     expect(calls).toContainEqual({
-      name: "list_recipe_posts_by_tag",
-      args: { tag_slug: "beef" }
+      name: "list_recipe_posts_page",
+      args: {
+        query_text: "",
+        tag_slugs: ["beef"],
+        page_offset: 0,
+        page_limit: 10,
+        sort_ascending: false
+      }
     });
   });
 
@@ -529,9 +646,16 @@ describe("recipe queries", () => {
       },
       rpc(name: string, args?: unknown) {
         calls.push({ name: "rpc", args: [name, args] });
-        if (name === "list_tags_for_post") {
+        if (name === "list_recipe_posts_page") {
           return Promise.resolve({
-            data: [{ id: "beef", name: "牛肉", slug: "beef" }],
+            data: [{
+              ...post,
+              tags: [{ id: "beef", name: "牛肉", slug: "beef" }],
+              servings: null,
+              calories_total_kcal: null,
+              calories_per_serving_kcal: null,
+              total_count: 1
+            }],
             error: null
           });
         }
@@ -543,10 +667,13 @@ describe("recipe queries", () => {
 
     expect(result).toMatchObject({ page: 1, pageSize: 10, pageCount: 1, total: 1 });
     expect(result.posts[0].tags).toEqual([{ id: "beef", name: "牛肉", slug: "beef" }]);
-    expect(calls).toContainEqual({ name: "eq", args: ["status", "published"] });
-    expect(calls).toContainEqual({ name: "eq", args: ["content_kind", "recipe"] });
-    expect(calls).toContainEqual({ name: "or", args: ["title.ilike.%牛肉%,content_html.ilike.%牛肉%"] });
-    expect(calls.some((call) => call.name === "rpc" && call.args[0] === "search_posts")).toBe(false);
+    expect(calls).toEqual([{ name: "rpc", args: ["list_recipe_posts_page", {
+      query_text: "牛肉",
+      tag_slugs: [],
+      page_offset: 0,
+      page_limit: 10,
+      sort_ascending: false
+    }] }]);
   });
 
   it("searches within AND-style selected recipe tags through a database RPC", async () => {
@@ -570,11 +697,18 @@ describe("recipe queries", () => {
       },
       rpc(name: string, args?: unknown) {
         calls.push({ name, args });
-        if (name === "search_recipe_posts_by_tags") {
-          return Promise.resolve({ data: [post], error: null });
-        }
-        if (name === "list_tags_for_post") {
-          return Promise.resolve({ data: [{ id: "beef", name: "牛肉", slug: "beef" }], error: null });
+        if (name === "list_recipe_posts_page") {
+          return Promise.resolve({
+            data: [{
+              ...post,
+              tags: [{ id: "beef", name: "牛肉", slug: "beef" }],
+              servings: null,
+              calories_total_kcal: null,
+              calories_per_serving_kcal: null,
+              total_count: 1
+            }],
+            error: null
+          });
         }
         throw new Error("unexpected rpc");
       }
@@ -584,8 +718,14 @@ describe("recipe queries", () => {
 
     expect(result.posts[0].slug).toBe("beef-and-chickpeas");
     expect(calls).toContainEqual({
-      name: "search_recipe_posts_by_tags",
-      args: { q: "牛肉", tag_slugs: ["beef", "stew"] }
+      name: "list_recipe_posts_page",
+      args: {
+        query_text: "牛肉",
+        tag_slugs: ["beef", "stew"],
+        page_offset: 0,
+        page_limit: 10,
+        sort_ascending: false
+      }
     });
   });
 
@@ -632,21 +772,16 @@ describe("recipe queries", () => {
         };
       },
       rpc(name: string, args?: unknown) {
-        if (name === "list_tags_for_post") {
-          return Promise.resolve({ data: [], error: null });
-        }
-        if (name === "list_recipe_nutrition_estimate") {
-          expect(args).toEqual({ target_post_id: "recipe-1" });
+        if (name === "list_recipe_posts_page") {
           return Promise.resolve({
             data: [
               {
+                ...post,
+                tags: [],
                 calories_total_kcal: 1800,
                 calories_per_serving_kcal: 450,
                 servings: 4,
-                confidence: 0.72,
-                needs_review: false,
-                summary: "每份约 450 kcal。",
-                ingredient_estimates_json: [{ name: "牛肉", calories_kcal: 1250 }]
+                total_count: 1
               }
             ],
             error: null

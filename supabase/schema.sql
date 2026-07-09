@@ -332,6 +332,110 @@ as $$
   order by post_count desc, tags.sort_order asc, tags.name asc;
 $$;
 
+create or replace function public.list_recipe_posts_page(
+  query_text text default '',
+  tag_slugs text[] default array[]::text[],
+  page_offset integer default 0,
+  page_limit integer default 10,
+  sort_ascending boolean default false
+)
+returns table(
+  id uuid,
+  legacy_id integer,
+  title text,
+  slug text,
+  excerpt text,
+  status text,
+  content_kind text,
+  created_at timestamptz,
+  updated_at timestamptz,
+  published_at timestamptz,
+  tags jsonb,
+  servings integer,
+  calories_total_kcal integer,
+  calories_per_serving_kcal integer,
+  total_count bigint
+)
+language sql
+stable
+as $$
+  with selected_tags as (
+    select distinct trim(value) as slug
+    from unnest(coalesce(tag_slugs, array[]::text[])) as value
+    where length(trim(value)) > 0
+  ),
+  matching_posts as (
+    select posts.*
+    from public.posts
+    where posts.status = 'published'
+      and posts.content_kind = 'recipe'
+      and (
+        length(trim(coalesce(query_text, ''))) = 0
+        or posts.title ilike '%' || trim(query_text) || '%'
+        or posts.content_html ilike '%' || trim(query_text) || '%'
+      )
+      and not exists (
+        select 1
+        from selected_tags
+        where not exists (
+          select 1
+          from public.post_tags
+          join public.tags on tags.id = post_tags.tag_id
+          where post_tags.post_id = posts.id
+            and tags.slug = selected_tags.slug
+        )
+      )
+  ),
+  counted_posts as (
+    select matching_posts.*, count(*) over() as total_count
+    from matching_posts
+  ),
+  paged_posts as (
+    select *
+    from counted_posts
+    order by
+      case when coalesce(sort_ascending, false) then coalesce(published_at, created_at) end asc,
+      case when not coalesce(sort_ascending, false) then coalesce(published_at, created_at) end desc,
+      id asc
+    offset greatest(coalesce(page_offset, 0), 0)
+    limit greatest(1, least(coalesce(page_limit, 10), 50))
+  )
+  select
+    paged_posts.id,
+    paged_posts.legacy_id,
+    paged_posts.title,
+    paged_posts.slug,
+    paged_posts.excerpt,
+    paged_posts.status,
+    paged_posts.content_kind,
+    paged_posts.created_at,
+    paged_posts.updated_at,
+    paged_posts.published_at,
+    tag_data.tags,
+    nutrition.servings,
+    nutrition.calories_total_kcal,
+    nutrition.calories_per_serving_kcal,
+    paged_posts.total_count
+  from paged_posts
+  left join lateral (
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object('id', tags.id, 'name', tags.name, 'slug', tags.slug)
+        order by tags.sort_order asc, tags.name asc
+      ),
+      '[]'::jsonb
+    ) as tags
+    from public.post_tags
+    join public.tags on tags.id = post_tags.tag_id
+    where post_tags.post_id = paged_posts.id
+  ) as tag_data on true
+  left join public.recipe_nutrition_estimates as nutrition on nutrition.post_id = paged_posts.id
+  order by
+    case when coalesce(sort_ascending, false) then coalesce(paged_posts.published_at, paged_posts.created_at) end asc,
+    case when not coalesce(sort_ascending, false) then coalesce(paged_posts.published_at, paged_posts.created_at) end desc,
+    paged_posts.id asc;
+$$;
+
 create or replace function public.list_recipe_posts_by_tag(tag_slug text)
 returns setof public.posts
 language sql
