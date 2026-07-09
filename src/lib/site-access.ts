@@ -17,7 +17,6 @@ export type SiteAccessDecisionInput = {
   env: SiteAccessEnv;
 };
 
-const PUBLIC_FILE_PATTERN = /\.(?:avif|css|gif|ico|jpg|jpeg|js|map|png|svg|txt|webmanifest|woff2?)$/i;
 const CRAWLER_USER_AGENT =
   /(?:GPTBot|ChatGPT-User|OAI-SearchBot|ClaudeBot|Claude-User|anthropic-ai|Google-Extended|Bytespider|PerplexityBot|Amazonbot)/i;
 
@@ -57,11 +56,10 @@ export async function verifySiteSessionToken(
 
 function isAlwaysAllowedPath(pathname: string): boolean {
   return (
-    pathname === "/admin" ||
-    pathname === "/api/admin/login" ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
-    PUBLIC_FILE_PATTERN.test(pathname)
+    pathname === "/icon.svg" ||
+    pathname === "/robots.txt"
   );
 }
 
@@ -86,6 +84,9 @@ export async function getSiteAccessDecision(input: SiteAccessDecisionInput): Pro
   }
   if (isKnownCrawler(input.userAgent)) {
     return { action: "forbidden" };
+  }
+  if (url.pathname === "/admin" || url.pathname === "/api/admin/login") {
+    return { action: "allow" };
   }
   if (url.pathname.startsWith("/api/")) {
     return { action: "unauthorized" };

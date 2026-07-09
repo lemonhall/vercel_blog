@@ -13,6 +13,12 @@ test("crawler requests stop before login and robots disallows private pages", as
   });
   expect(crawlerResponse.status()).toBe(403);
 
+  const crawlerAdminResponse = await request.get("/admin", {
+    headers: { "user-agent": "ChatGPT-User/1.0" },
+    maxRedirects: 0
+  });
+  expect(crawlerAdminResponse.status()).toBe(403);
+
   const robotsResponse = await request.get("/robots.txt");
   expect(robotsResponse.status()).toBe(200);
   await expect(robotsResponse.text()).resolves.toContain("Disallow: /");

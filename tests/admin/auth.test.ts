@@ -58,6 +58,43 @@ describe("admin auth", () => {
     expect(decision).toEqual({ action: "forbidden" });
   });
 
+  it("forbids crawlers from opening the dynamic admin login directly", async () => {
+    await expect(
+      getSiteAccessDecision({
+        method: "GET",
+        url: "https://lemonhall.me/admin",
+        userAgent: "ChatGPT-User/1.0",
+        sessionToken: undefined,
+        env: { authCookieSecret: "cookie-secret", adminPassword: "admin-password" }
+      })
+    ).resolves.toEqual({ action: "forbidden" });
+  });
+
+  it("does not mistake dotted dynamic post slugs for public static assets", async () => {
+    const env = { authCookieSecret: "cookie-secret", adminPassword: "admin-password" };
+    await expect(
+      getSiteAccessDecision({
+        method: "GET",
+        url: "https://lemonhall.me/posts/private-note.txt",
+        userAgent: "Mozilla/5.0",
+        sessionToken: undefined,
+        env
+      })
+    ).resolves.toEqual({
+      action: "redirect",
+      location: "https://lemonhall.me/admin?next=%2Fposts%2Fprivate-note.txt"
+    });
+    await expect(
+      getSiteAccessDecision({
+        method: "GET",
+        url: "https://lemonhall.me/posts/private-note.txt",
+        userAgent: "OAI-SearchBot/1.0",
+        sessionToken: undefined,
+        env
+      })
+    ).resolves.toEqual({ action: "forbidden" });
+  });
+
   it("allows login and static assets while rejecting unauthenticated protected APIs", async () => {
     const env = { authCookieSecret: "cookie-secret", adminPassword: "admin-password" };
 
@@ -69,6 +106,9 @@ describe("admin auth", () => {
     ).resolves.toEqual({ action: "allow" });
     await expect(
       getSiteAccessDecision({ method: "GET", url: "https://lemonhall.me/icon.svg", sessionToken: undefined, env })
+    ).resolves.toEqual({ action: "allow" });
+    await expect(
+      getSiteAccessDecision({ method: "GET", url: "https://lemonhall.me/robots.txt", sessionToken: undefined, env })
     ).resolves.toEqual({ action: "allow" });
     await expect(
       getSiteAccessDecision({ method: "POST", url: "https://lemonhall.me/api/uploads/image", sessionToken: undefined, env })
