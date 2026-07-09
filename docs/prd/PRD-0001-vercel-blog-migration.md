@@ -14,6 +14,8 @@
 - 公开页面支持基础全文搜索，使用 Supabase Postgres 的 `ILIKE` 查询即可。
 - 食谱类文章可以形成独立频道，并通过 tags 云按菜系、食材、做法等维度浏览；多个 tags 同时选择时使用 AND 交集筛选。[ECN-0007]
 - 后台新增或更新食谱时，可以通过 Vercel AI Gateway 调用 `openai/gpt-5.2` 估算菜品卡路里；存量食谱先通过本地 JSONL 批量估算导入，估算总值与食材明细都持久化为可审计数据。[ECN-0008]
+- 博客可以临时切换为复用后台密码的全站私有访问模式，在页面查询 Supabase 前拦截未登录访问。[ECN-0009]
+- 食谱频道必须避免 crawler URL 组合陷阱和 N+1 查询，公开读取使用有限投影、数据库内分页与可失效缓存。[ECN-0010]
 
 ## Context
 
@@ -280,6 +282,62 @@
 - AI 调用失败时，文章保存状态可判定：如果文章已保存则返回估算失败提示；如果文章保存失败则不调用 AI。
 - 单元测试覆盖 AI 输入构造、JSON 校验、普通文章不调用 AI、食谱估算持久化、公开查询返回最终值、详情查询返回明细和失败路径。
 - Playwright E2E 覆盖后台编辑食谱触发估算、食谱列表显示最终卡路里值、详情页显示明细。
+
+### REQ-0001-010: Private Site Access Gate
+
+动机：生产 Supabase egress 出现异常增长时，需要在不引入第二套凭据的前提下先阻断未授权页面查询，保护数据库配额和站主数据。
+
+范围：
+
+- 复用 `ADMIN_PASSWORD` 和 `admin_session` 作为全站访问凭据。
+- 未登录普通浏览器访问受保护页面时，在页面查询前跳转后台登录页并保留原始目标。
+- 登录页、登录 API、静态资源和 Next 内部资源保持可用。
+- 未登录受保护 API 返回 401，不返回登录 HTML。
+
+非目标：
+
+- 不新增用户注册、多人账号或独立公开站点密码。
+- 不把后台密码或 session token 暴露到客户端源码。
+
+验收：
+
+- 未登录页面请求不会进入 Supabase 页面查询。
+- 登录后可以继续访问首页、搜索、食谱、详情和后台。
+- 未登录 API 请求返回 401；静态资源正常加载。
+- 单元测试和 Playwright 覆盖未登录、登录后和静态资源边界。
+
+### REQ-0001-011: Recipe Traffic Containment And Bounded Queries
+
+动机：食谱 tag 组合链接和逐篇附加查询把普通 crawler 流量放大为大量 Vercel 动态请求与 Supabase egress。系统必须让 URL 空间、查询次数、返回字段和缓存失效都具有明确上限。[ECN-0010]
+
+范围：
+
+- 私有访问期间的 `robots.txt` 必须禁止抓取全站。
+- 已识别 crawler 访问受保护页面时直接返回 403，不重定向动态登录页；普通浏览器登录体验保持不变。
+- tag slug 在生成查询前必须解码、去重并稳定排序。
+- 页面不得输出从当前多 tag 集合递归追加 tag 的链接；多 tag 筛选仍可由用户提交表单完成，并保持 AND 语义。
+- 多 tag、搜索和非首页分页结果必须标记为不索引，并提供稳定 canonical。
+- 食谱列表必须由数据库内分页 RPC 返回有限投影、聚合 tags、精简 nutrition 和总数。
+- 满页食谱列表渲染最多执行 2 次 Supabase 调用，不得逐篇查询 tags 或 nutrition。
+- 首页和食谱列表不得读取不展示的完整正文；食谱列表不得读取食材明细和原始 AI JSON。
+- 公开读取必须使用跨请求数据缓存；后台保存或逻辑删除成功后必须失效相关文章、列表和食谱缓存。
+
+非目标：
+
+- 不取消多 tag AND 筛选能力。
+- 不依赖 robots 或 User-Agent 作为身份认证机制。
+- 不在 v8 引入全文搜索引擎、复杂缓存服务或新的付费基础设施。
+- 不在 Supabase schema 未应用时回退到旧 N+1 查询。
+
+验收：
+
+- crawler User-Agent 请求受保护页面返回 403，普通浏览器未登录仍跳转登录页。
+- `robots.txt` 返回全站 `Disallow: /`。
+- 57 个 tag 不会通过页面链接形成多 tag 排列 URL；同一 tag 集合只有一个排序后的表示。
+- schema 测试证明分页 RPC 在 SQL 内执行 AND tag 过滤、排序、分页和总数计算，且返回定义不含 `content_html`、`ingredient_estimates_json`、`raw_estimate_json`。
+- 单元测试证明满页食谱列表底层 Supabase 调用数不超过 2。
+- 后台保存和逻辑删除的测试证明成功后失效 `posts`、`recipes` 和相关路径，失败时不误报成功。
+- `npm test`、`npx tsc --noEmit`、`npm run build`、`npm run e2e` 全部通过。
 
 ## Proposed Data Model
 
