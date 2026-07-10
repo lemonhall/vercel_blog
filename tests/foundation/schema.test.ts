@@ -57,7 +57,10 @@ describe("Supabase schema", () => {
     );
 
     expect(start).toBeGreaterThanOrEqual(0);
-    expect(recipePageFunction).toContain("count(*) over()");
+    expect(recipePageFunction).toContain("matching_count as");
+    expect(recipePageFunction).toContain("bounded_paging as");
+    expect(recipePageFunction).toContain("((matching_count.total_count - 1) / normalized_paging.page_limit)");
+    expect(recipePageFunction).not.toContain("count(*) over()");
     expect(recipePageFunction).toContain("greatest(1, least(coalesce(page_limit, 10), 50))");
     expect(recipePageFunction).toContain("not exists");
     expect(returnProjection).not.toContain("content_html");

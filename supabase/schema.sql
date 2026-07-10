@@ -364,6 +364,9 @@ as $$
     from unnest(coalesce(tag_slugs, array[]::text[])) as value
     where length(trim(value)) > 0
   ),
+  normalized_paging as (
+    select greatest(1, least(coalesce(page_limit, 10), 50))::bigint as page_limit
+  ),
   matching_posts as (
     select posts.*
     from public.posts
@@ -386,19 +389,34 @@ as $$
         )
       )
   ),
-  counted_posts as (
-    select matching_posts.*, count(*) over() as total_count
+  matching_count as (
+    select count(*)::bigint as total_count
     from matching_posts
   ),
+  bounded_paging as (
+    select
+      normalized_paging.page_limit,
+      matching_count.total_count,
+      case
+        when matching_count.total_count = 0 then 0::bigint
+        else least(
+          greatest(coalesce(page_offset, 0), 0)::bigint,
+          ((matching_count.total_count - 1) / normalized_paging.page_limit) * normalized_paging.page_limit
+        )
+      end as page_offset
+    from matching_count
+    cross join normalized_paging
+  ),
   paged_posts as (
-    select *
-    from counted_posts
+    select matching_posts.*, bounded_paging.total_count
+    from matching_posts
+    cross join bounded_paging
     order by
       case when coalesce(sort_ascending, false) then coalesce(published_at, created_at) end asc,
       case when not coalesce(sort_ascending, false) then coalesce(published_at, created_at) end desc,
       id asc
-    offset greatest(coalesce(page_offset, 0), 0)
-    limit greatest(1, least(coalesce(page_limit, 10), 50))
+    offset (select page_offset from bounded_paging)
+    limit (select page_limit from bounded_paging)
   )
   select
     paged_posts.id,

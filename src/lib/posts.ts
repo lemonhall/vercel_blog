@@ -174,6 +174,13 @@ function resolveClient(client?: SupabaseLike): SupabaseLike {
 
 const POST_LIST_COLUMNS =
   "id,legacy_id,title,slug,excerpt,status,content_kind,created_at,updated_at,published_at";
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
+function normalizeRecipePage(value: number | undefined, pageSize: number): number {
+  const page = normalizePositiveInteger(value, 1);
+  const maxPage = Math.floor(POSTGRES_INTEGER_MAX / pageSize) + 1;
+  return Math.min(page, maxPage);
+}
 
 type RecipePageRpcRow = PostListItem & {
   content_html?: unknown;
@@ -220,8 +227,8 @@ async function queryRecipePostsPage(
   options: PostPageOptions,
   client?: SupabaseLike
 ): Promise<RecipePostPageResult> {
-  const page = normalizePositiveInteger(options.page, 1);
   const pageSize = Math.min(normalizePositiveInteger(options.pageSize, 10), 50);
+  const page = normalizeRecipePage(options.page, pageSize);
   const sort = normalizeSort(options.sort);
   const result = (await resolveClient(client).rpc("list_recipe_posts_page", {
     query_text: query.trim(),
@@ -234,11 +241,12 @@ async function queryRecipePostsPage(
   throwIfError(result.error);
   const rows = result.data ?? [];
   const total = Number(rows[0]?.total_count ?? 0);
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   return {
     posts: rows.map(recipePostFromPageRow),
-    page,
+    page: Math.min(page, pageCount),
     pageSize,
-    pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    pageCount,
     total,
     sort
   };
@@ -249,8 +257,8 @@ async function fixtureRecipePostsPage(
   tagSlugs: string[],
   options: PostPageOptions
 ): Promise<RecipePostPageResult> {
-  const page = normalizePositiveInteger(options.page, 1);
-  const pageSize = normalizePositiveInteger(options.pageSize, 10);
+  const pageSize = Math.min(normalizePositiveInteger(options.pageSize, 10), 50);
+  const requestedPage = normalizeRecipePage(options.page, pageSize);
   const sort = normalizeSort(options.sort);
   const q = query.trim();
   const slugs = normalizeTagSlugs(tagSlugs);
@@ -269,12 +277,14 @@ async function fixtureRecipePostsPage(
     }),
     sort
   );
+  const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
+  const page = Math.min(requestedPage, pageCount);
   const from = (page - 1) * pageSize;
   return {
     posts: await attachTagsToPosts(matches.slice(from, from + pageSize)),
     page,
     pageSize,
-    pageCount: Math.max(1, Math.ceil(matches.length / pageSize)),
+    pageCount,
     total: matches.length,
     sort
   };

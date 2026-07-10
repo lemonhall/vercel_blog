@@ -389,6 +389,45 @@ describe("recipe queries", () => {
     ]);
   });
 
+  it("clamps oversized recipe pages without overflowing the database offset", async () => {
+    const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    const client = {
+      from() {
+        throw new Error("recipe pages must use the bounded RPC");
+      },
+      rpc(name: string, args?: unknown) {
+        calls.push({ name, args: args as Record<string, unknown> });
+        return Promise.resolve({
+          data: [
+            {
+              id: "recipe-1",
+              legacy_id: 6,
+              title: "Recipe",
+              slug: "recipe",
+              excerpt: null,
+              status: "published",
+              content_kind: "recipe",
+              created_at: "2022-05-23T21:09:02.478Z",
+              updated_at: "2022-05-23T21:24:19.540Z",
+              published_at: "2022-05-23T21:09:02.478Z",
+              tags: [],
+              servings: null,
+              calories_total_kcal: null,
+              calories_per_serving_kcal: null,
+              total_count: 21
+            }
+          ],
+          error: null
+        });
+      }
+    };
+
+    const result = await listRecipePostsPage({ page: Number.MAX_SAFE_INTEGER, pageSize: 10 }, client);
+
+    expect(result).toMatchObject({ page: 3, pageSize: 10, pageCount: 3, total: 21 });
+    expect(calls[0].args.page_offset).toBeLessThanOrEqual(2_147_483_647);
+  });
+
   it("uses one bounded recipe page RPC for search, tags, pagination, and compact nutrition", async () => {
     const calls: Array<{ name: string; args: unknown }> = [];
     const client = {
