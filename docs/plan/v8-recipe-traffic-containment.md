@@ -11,6 +11,8 @@
 - `REQ-0001-010`：普通浏览器私有登录流程不回归。
 - `REQ-0001-011`：抓取、URL、RPC、字段和缓存上限。
 
+缓存一致性与调用上限已由 `ECN-0011` 调整为事务内容版本方案。
+
 ## Scope
 
 做：robots、crawler 403、tag 规范化与表单、metadata、分页列表 RPC、有限字段、缓存和后台失效、单元/schema/E2E/生产边界验证。
@@ -26,7 +28,7 @@
 5. `listRecipePostsPage` 的数据库路径只调用 `list_recipe_posts_page` 一次，满页不调用逐篇 tags/nutrition RPC。
 6. SQL RPC 在数据库内过滤、排序、分页并返回总数；返回定义不含正文、食材明细和原始 AI JSON。
 7. 首页列表使用明确字段而非 `*`。
-8. 公开读取包装器使用稳定缓存；后台保存/删除成功失效，错误路径不失效。
+8. 公开读取包装器使用事务版本化缓存；食谱页只读取一次版本，热缓存 Supabase 调用不超过 1、冷缓存不超过 3；后台保存/删除成功失效，部分保存失败也失效已变更数据。
 9. 全量单测、类型、构建和 Playwright 退出 0；Review 无未处置 BLOCKER。
 
 ## Files
@@ -45,6 +47,8 @@
 - Test: `tests/admin/auth.test.ts`
 - Test: `tests/foundation/schema.test.ts`
 - Test: `tests/public/posts.test.ts`
+- Test: `tests/public/cache.test.ts`
+- Test: `tests/admin/posts-route.test.ts`
 - Test: `tests/e2e/public.spec.ts`
 
 ## Steps
@@ -77,9 +81,10 @@
 
 1. 对缓存包装器和失效函数写失败测试，使用可注入 adapter 避免 Vitest 依赖 Next 运行时全局状态。
 2. 实现 `src/lib/cache-invalidation.ts`，统一失效 `posts`、`recipes`、首页、食谱页和相关 slug。
-3. 无 client 的页面读取路径进入 Next 数据缓存；注入 client 和 fixture 路径保持直接调用。
-4. 后台保存和逻辑删除仅在成功后调用失效函数。
-5. 运行 admin/public 测试到绿，并验证失败路径没有失效调用。
+3. 无 client 的页面读取路径进入 Next 数据缓存；缓存参数包含数据库事务内容版本。
+4. 用并发测试证明旧 in-flight 读取只能写入旧版本键；食谱页面级包装器只读取一次版本。
+5. 后台保存和逻辑删除在数据已持久化后调用失效函数；posts 成功而 tags 失败时也必须失效。
+6. 运行 admin/public/cache 测试到绿，并验证完全失败路径没有误失效。
 
 ### 5. 全量验证与发布
 
@@ -95,7 +100,7 @@
 ## Risks
 
 - 新 SQL RPC 的聚合和窗口计数可能出现重复行：schema 测试和 fixture RPC 映射测试覆盖，生产前用小 limit smoke。
-- Next cache API 在测试环境不可直接观察：把失效决策放在纯 adapter，框架绑定保持薄层。
+- Next cache 失效存在 in-flight 回填竞争：按 ECN-0011 使用数据库事务版本键隔离，并保留 tag/path 主动失效。
 - 多 tag UI 从链接改为表单可能影响移动端：Playwright desktop/mobile 同时覆盖。
 - Supabase 配额限制可能阻止 schema 发布：保持门禁，不发布依赖新 RPC 的应用，不输出 fully done 信号。
 - crawler User-Agent 可伪造：它不参与认证，只用于把未登录响应从 redirect 收敛为 403。

@@ -81,6 +81,59 @@ create table if not exists public.recipe_nutrition_estimates (
   unique(post_id)
 );
 
+create table if not exists public.public_content_versions (
+  singleton boolean primary key default true check (singleton),
+  version bigint not null default 1 check (version > 0)
+);
+
+insert into public.public_content_versions(singleton, version)
+values (true, 1)
+on conflict (singleton) do nothing;
+
+create or replace function public.get_public_content_version()
+returns bigint
+language sql
+stable
+as $$
+  select version
+  from public.public_content_versions
+  where singleton = true;
+$$;
+
+create or replace function public.bump_public_content_version()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.public_content_versions
+  set version = version + 1
+  where singleton = true;
+  return null;
+end;
+$$;
+
+drop trigger if exists posts_bump_public_content_version on public.posts;
+create trigger posts_bump_public_content_version
+after insert or update or delete on public.posts
+for each statement execute function public.bump_public_content_version();
+
+drop trigger if exists tags_bump_public_content_version on public.tags;
+create trigger tags_bump_public_content_version
+after insert or update or delete on public.tags
+for each statement execute function public.bump_public_content_version();
+
+drop trigger if exists post_tags_bump_public_content_version on public.post_tags;
+create trigger post_tags_bump_public_content_version
+after insert or update or delete on public.post_tags
+for each statement execute function public.bump_public_content_version();
+
+drop trigger if exists recipe_nutrition_bump_public_content_version on public.recipe_nutrition_estimates;
+create trigger recipe_nutrition_bump_public_content_version
+after insert or update or delete on public.recipe_nutrition_estimates
+for each statement execute function public.bump_public_content_version();
+
 create index if not exists posts_status_published_at_idx
   on public.posts(status, published_at desc);
 

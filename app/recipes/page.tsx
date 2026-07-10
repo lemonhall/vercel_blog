@@ -6,7 +6,7 @@ import {
   type PostWithTags,
   type RecipeTag
 } from "@/lib/posts";
-import { listRecipePostsPageCached, listRecipeTagsCached } from "@/lib/public-posts";
+import { listRecipePageDataCached } from "@/lib/public-posts";
 import {
   normalizeRecipeTags,
   recipeHref,
@@ -81,10 +81,7 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
   let tags: RecipeTag[] = [];
   let setupError = false;
   try {
-    [result, tags] = await Promise.all([
-      listRecipePostsPageCached(query, selectedTags, { page: currentPage, pageSize: 10 }),
-      listRecipeTagsCached()
-    ]);
+    [result, tags] = await listRecipePageDataCached(query, selectedTags, { page: currentPage, pageSize: 10 });
   } catch {
     setupError = true;
   }

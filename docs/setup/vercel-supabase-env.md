@@ -88,11 +88,15 @@ supabase/schema.sql
    - `post_assets`
    - `tags`
    - `post_tags`
+   - `recipe_nutrition_estimates`
+   - `public_content_versions`
 7. 在数据库函数里确认有：
    - `search_posts(q text)`
    - `save_post_tags(...)`
    - `save_post_tags_for_post(...)`
    - `list_recipe_tags()`
+   - `list_recipe_posts_page(...)`
+   - `get_public_content_version()`
    - `list_recipe_posts_by_tag(tag_slug text)`
    - `list_recipe_posts_by_tags(tag_slugs text[])`
    - `search_recipe_posts_by_tags(q text, tag_slugs text[])`

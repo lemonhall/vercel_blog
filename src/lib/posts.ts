@@ -172,6 +172,18 @@ function resolveClient(client?: SupabaseLike): SupabaseLike {
   return client ?? (createSupabaseServiceClient() as unknown as SupabaseLike);
 }
 
+export async function getPublicContentVersion(client?: SupabaseLike): Promise<string> {
+  if (!client && useFixtureData()) {
+    return "fixture-v1";
+  }
+  const result = (await resolveClient(client).rpc("get_public_content_version")) as {
+    data: number | string | null;
+    error: QueryError | null;
+  };
+  throwIfError(result.error);
+  return String(result.data ?? "0");
+}
+
 const POST_LIST_COLUMNS =
   "id,legacy_id,title,slug,excerpt,status,content_kind,created_at,updated_at,published_at";
 const POSTGRES_INTEGER_MAX = 2_147_483_647;

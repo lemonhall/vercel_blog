@@ -3,6 +3,7 @@ import { sanitizePostHtml } from "@/lib/html";
 import { normalizeRecipeTags, recipeHref, recipeIndexPolicy } from "@/lib/recipe-filters";
 import {
   getPostBySlug,
+  getPublicContentVersion,
   getPostWithNutritionBySlug,
   listDraftPosts,
   listPublishedPostsPage,
@@ -252,6 +253,20 @@ describe("listDraftPosts", () => {
 });
 
 describe("recipe queries", () => {
+  it("reads the public content version through one scalar RPC", async () => {
+    const client = {
+      from() {
+        throw new Error("content version must use rpc");
+      },
+      rpc(name: string) {
+        expect(name).toBe("get_public_content_version");
+        return Promise.resolve({ data: 42, error: null });
+      }
+    };
+
+    await expect(getPublicContentVersion(client)).resolves.toBe("42");
+  });
+
   it("uses published recipe filters for recipe lists", async () => {
     const calls: Array<{ name: string; args: unknown[] }> = [];
     const builder = {

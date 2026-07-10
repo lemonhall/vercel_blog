@@ -2,7 +2,7 @@
 
 ## 愿景
 
-关联 `PRD-0001`、`ECN-0010`、`REQ-0001-008`、`REQ-0001-009`、`REQ-0001-010` 和 `REQ-0001-011`。v8 的目标是在保持 v7 私有门禁的同时，消除 `/recipes` 的 crawler URL 组合陷阱、N+1 查询、全量正文出站和无缓存动态读取，使抓取入口、URL 空间、单请求 Supabase 调用数和返回字段都有可测试上限。
+关联 `PRD-0001`、`ECN-0010`、`ECN-0011`、`REQ-0001-008`、`REQ-0001-009`、`REQ-0001-010` 和 `REQ-0001-011`。v8 的目标是在保持 v7 私有门禁的同时，消除 `/recipes` 的 crawler URL 组合陷阱、N+1 查询、全量正文出站和无缓存动态读取，使抓取入口、URL 空间、单请求 Supabase 调用数和返回字段都有可测试上限。
 
 设计依据：`docs/superpowers/specs/2026-07-10-recipe-traffic-containment-design.md`。
 
@@ -18,8 +18,8 @@
 |---|---|---|---|---|
 | M1 文档与追溯 | PRD、ECN、设计、v8 计划 | REQ/ECN/计划/测试命令无断链；DoD 全部可二元判定；乱码扫描无命中 | doc hygiene；`git diff --check`；乱码扫描 | doing |
 | M2 抓取与 URL 边界 | robots、crawler 403、tag 参数和表单、metadata | crawler `/recipes`=403；普通未登录=303；robots 全站 Disallow；页面不输出递归追加 tag 链接；多 tag noindex | `npm test -- tests/admin/auth.test.ts tests/public/posts.test.ts`；Playwright crawler/recipes 用例 | todo |
-| M3 有界数据协议 | 分页 RPC、有限投影、去除 N+1、首页投影 | 满页食谱列表 RPC=1，连同 tag 云总调用<=2；SQL 内分页/AND/总数；列表协议不含正文和原始 nutrition JSON | `npm test -- tests/foundation/schema.test.ts tests/public/posts.test.ts` | todo |
-| M4 缓存与失效 | 公开读取缓存、后台保存/删除失效 | 跨请求缓存键稳定；保存/删除成功失效 `posts`/`recipes`/path；失败不执行失效 | `npm test -- tests/admin/auth.test.ts tests/public/posts.test.ts` | todo |
+| M3 有界数据协议 | 分页 RPC、有限投影、去除 N+1、首页投影 | 食谱内容 RPC<=2；SQL 内分页/AND/总数；列表协议不含正文和原始 nutrition JSON | `npm test -- tests/foundation/schema.test.ts tests/public/posts.test.ts` | todo |
+| M4 缓存与失效 | 版本化公开缓存、后台保存/删除失效 | 热缓存食谱页 Supabase 调用<=1，冷缓存<=3；旧 in-flight 读取不能污染新版本键；成功失效 `posts`/`recipes`/path | `npm test -- tests/admin/auth.test.ts tests/admin/posts-route.test.ts tests/public/cache.test.ts` | todo |
 | M5 E2E、Review 与发布 | 全量回归、独立审查、schema/application/smoke | 全量命令 exit 0；Review 无 BLOCKER；MAJOR 全部处置；schema 先于应用；live 边界符合预期 | `npm test`；`npx tsc --noEmit`；`npm run build`；`npm run e2e`；production smoke | todo |
 
 ## 计划索引
@@ -34,7 +34,7 @@
 | REQ-0001-008 | ECN-0007、ECN-0010 | M2、M3 | `tests/public/posts.test.ts` | `tests/e2e/public.spec.ts` 食谱筛选 | todo |
 | REQ-0001-009 | ECN-0008、ECN-0010 | M3 | `tests/foundation/schema.test.ts`、`tests/public/posts.test.ts` | 食谱列表/详情 nutrition | todo |
 | REQ-0001-010 | ECN-0009、ECN-0010 | M2 | `tests/admin/auth.test.ts` | 私有登录流程 | todo |
-| REQ-0001-011 | ECN-0010 | M2、M3、M4、M5 | `tests/admin/auth.test.ts`、`tests/foundation/schema.test.ts`、`tests/public/posts.test.ts` | crawler、robots、筛选、后台失效后的读取 | todo |
+| REQ-0001-011 | ECN-0010、ECN-0011 | M2、M3、M4、M5 | `tests/admin/auth.test.ts`、`tests/admin/posts-route.test.ts`、`tests/foundation/schema.test.ts`、`tests/public/cache.test.ts`、`tests/public/posts.test.ts` | crawler、robots、筛选、后台失效后的读取 | todo |
 
 ## ECN 索引
 
@@ -42,6 +42,7 @@
 - ECN-0008：食谱卡路里估算。
 - ECN-0009：全站私有访问门禁。
 - ECN-0010：食谱抓取流量与查询扇出治理。
+- ECN-0011：公开缓存使用事务内容版本隔离并发回填。
 
 ## DoD 硬度自检
 
@@ -56,6 +57,7 @@
 - [x] REQ-0001-010 已补回 PRD，修复 v7 的追溯漂移。
 - [x] REQ-0001-011 包含动机、范围、非目标和二元验收。
 - [x] ECN-0010 已同步 PRD、设计和 v8 计划。
+- [x] ECN-0011 已同步 PRD、schema、缓存测试和 v8 计划。
 - [x] 所有计划任务绑定 Req ID、文件、红绿命令和预期结果。
 - [x] 术语统一使用 `crawler`、`canonical tags`、`recipe list RPC`、`posts`/`recipes` cache tag。
 

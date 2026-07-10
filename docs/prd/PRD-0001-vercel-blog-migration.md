@@ -308,7 +308,7 @@
 
 ### REQ-0001-011: Recipe Traffic Containment And Bounded Queries
 
-动机：食谱 tag 组合链接和逐篇附加查询把普通 crawler 流量放大为大量 Vercel 动态请求与 Supabase egress。系统必须让 URL 空间、查询次数、返回字段和缓存失效都具有明确上限。[ECN-0010]
+动机：食谱 tag 组合链接和逐篇附加查询把普通 crawler 流量放大为大量 Vercel 动态请求与 Supabase egress。系统必须让 URL 空间、查询次数、返回字段和缓存失效都具有明确上限。[ECN-0010][ECN-0011]
 
 范围：
 
@@ -318,9 +318,9 @@
 - 页面不得输出从当前多 tag 集合递归追加 tag 的链接；多 tag 筛选仍可由用户提交表单完成，并保持 AND 语义。
 - 多 tag、搜索和非首页分页结果必须标记为不索引，并提供稳定 canonical。
 - 食谱列表必须由数据库内分页 RPC 返回有限投影、聚合 tags、精简 nutrition 和总数。
-- 满页食谱列表渲染最多执行 2 次 Supabase 调用，不得逐篇查询 tags 或 nutrition。
+- 热缓存食谱页最多执行 1 次标量版本 RPC；冷缓存最多执行 3 次 Supabase 调用，其中内容 RPC 最多 2 次，且不得逐篇查询 tags 或 nutrition。[已由 ECN-0011 变更]
 - 首页和食谱列表不得读取不展示的完整正文；食谱列表不得读取食材明细和原始 AI JSON。
-- 公开读取必须使用跨请求数据缓存；后台保存或逻辑删除成功后必须失效相关文章、列表和食谱缓存。
+- 公开读取必须使用事务版本隔离的跨请求数据缓存；后台保存或逻辑删除成功后必须失效相关文章、列表和食谱缓存。[已由 ECN-0011 变更]
 
 非目标：
 
@@ -335,7 +335,8 @@
 - `robots.txt` 返回全站 `Disallow: /`。
 - 57 个 tag 不会通过页面链接形成多 tag 排列 URL；同一 tag 集合只有一个排序后的表示。
 - schema 测试证明分页 RPC 在 SQL 内执行 AND tag 过滤、排序、分页和总数计算，且返回定义不含 `content_html`、`ingredient_estimates_json`、`raw_estimate_json`。
-- 单元测试证明满页食谱列表底层 Supabase 调用数不超过 2。
+- 单元测试证明食谱页只读取一次内容版本；热缓存总调用不超过 1，冷缓存总调用不超过 3，内容 RPC 不超过 2。[已由 ECN-0011 变更]
+- 并发测试证明旧版本 in-flight 读取完成后不能覆盖新版本缓存键。[ECN-0011]
 - 后台保存和逻辑删除的测试证明成功后失效 `posts`、`recipes` 和相关路径，失败时不误报成功。
 - `npm test`、`npx tsc --noEmit`、`npm run build`、`npm run e2e` 全部通过。
 
