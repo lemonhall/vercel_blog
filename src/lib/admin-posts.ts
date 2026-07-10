@@ -32,6 +32,10 @@ export type RecipeNutritionEstimator = (
   input: RecipeNutritionInput & { model: string }
 ) => Promise<RecipeNutritionEstimate>;
 
+export type AdminPostSaveHooks = {
+  onPostPersisted?: () => void;
+};
+
 function throwIfError(error: { message: string } | null): void {
   if (error) {
     throw new Error(error.message);
@@ -46,7 +50,11 @@ export function normalizeAdminContentKind(value: string): AdminContentKind {
   return value === "recipe" ? "recipe" : "post";
 }
 
-export async function saveAdminPost(input: AdminPostInput, client: AdminPostClient): Promise<string> {
+export async function saveAdminPost(
+  input: AdminPostInput,
+  client: AdminPostClient,
+  hooks: AdminPostSaveHooks = {}
+): Promise<string> {
   const now = new Date().toISOString();
   const payload = {
     title: input.title,
@@ -64,6 +72,7 @@ export async function saveAdminPost(input: AdminPostInput, client: AdminPostClie
     : await client.from("posts").insert(payload);
 
   throwIfError(result.error);
+  hooks.onPostPersisted?.();
   if (input.tagNames && client.rpc) {
     const tagResult = await client.rpc("save_post_tags", { post_slug: input.slug, tag_names: input.tagNames });
     throwIfError(tagResult.error);

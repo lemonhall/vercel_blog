@@ -4,6 +4,7 @@ import { getServerEnv } from "@/lib/env";
 import { verifyAdminSessionToken } from "@/lib/auth";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { deleteAdminPost, type AdminPostClient } from "@/lib/admin-posts";
+import { runWithPostCacheInvalidation } from "@/lib/cache-invalidation";
 
 async function requireAdmin(): Promise<boolean> {
   const env = getServerEnv();
@@ -27,7 +28,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    await deleteAdminPost(slug, createSupabaseServiceClient() as unknown as AdminPostClient);
+    await runWithPostCacheInvalidation(slug, () =>
+      deleteAdminPost(slug, createSupabaseServiceClient() as unknown as AdminPostClient)
+    );
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Delete failed" }, { status: 500 });
   }

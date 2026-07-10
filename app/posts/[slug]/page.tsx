@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getPostWithNutritionBySlug } from "@/lib/posts";
+import { getPostWithNutritionBySlugCached } from "@/lib/public-posts";
 import { sanitizePostHtml } from "@/lib/html";
 import { PostAdminActions } from "@/components/PostAdminActions";
 import { isAdminSessionValid } from "@/lib/admin-session";
@@ -22,7 +22,7 @@ export default async function PostPage({ params, searchParams }: PostPageProps) 
   const { slug } = await params;
   const query = await searchParams;
   const wide = query?.wide === "1";
-  const post = await getPostWithNutritionBySlug(slug);
+  const post = await getPostWithNutritionBySlugCached(slug);
   const isAdmin = await isAdminSessionValid();
   if (!post) {
     notFound();

@@ -1,19 +1,23 @@
+import type { Metadata, Route } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
-  listRecipePostsByTagsPage,
-  listRecipePostsPage,
-  listRecipeTags,
-  searchRecipePostsByTagsPage,
-  searchRecipePostsPage,
   type PostSort,
   type PostWithTags,
   type RecipeTag
 } from "@/lib/posts";
+import { listRecipePageDataCached } from "@/lib/public-posts";
+import {
+  normalizeRecipeTags,
+  recipeHref,
+  recipeIndexPolicy,
+  type RecipeSearchParams
+} from "@/lib/recipe-filters";
 
 export const dynamic = "force-dynamic";
 
 type RecipesPageProps = {
-  searchParams?: Promise<{ page?: string; q?: string; tags?: string }>;
+  searchParams?: Promise<RecipeSearchParams>;
 };
 
 function formatDate(value: string | null): string {
@@ -28,59 +32,31 @@ function parsePage(value: string | undefined): number {
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
 
-function selectedTagsFromParam(value: string | undefined): string[] {
-  const seen = new Set<string>();
-  const tags: string[] = [];
-  for (const part of (value ?? "").split(",")) {
-    const tag = part.trim();
-    if (tag && !seen.has(tag)) {
-      seen.add(tag);
-      tags.push(tag);
-    }
-  }
-  return tags;
-}
-
-function tagsParam(tags: string[]): string {
-  return tags.join(",");
-}
-
-function hrefFor(input: { page?: number; query: string; tags: string[] }): string {
-  const params = new URLSearchParams();
-  const q = input.query.trim();
-  if (q) {
-    params.set("q", q);
-  }
-  if (input.tags.length > 0) {
-    params.set("tags", tagsParam(input.tags));
-  }
-  if (input.page && input.page > 1) {
-    params.set("page", String(input.page));
-  }
-  const value = params.toString();
-  return value ? `/recipes?${value}` : "/recipes";
-}
-
-function hrefForToggledTag(input: { tagSlug: string; selectedTags: string[]; query: string }): string {
-  const nextTags = input.selectedTags.includes(input.tagSlug)
-    ? input.selectedTags.filter((slug) => slug !== input.tagSlug)
-    : [...input.selectedTags, input.tagSlug];
-  return hrefFor({ query: input.query, tags: nextTags });
-}
-
-function RecipePostTags({ post, selectedTags, query }: { post: PostWithTags; selectedTags: string[]; query: string }) {
+function RecipePostTags({ post }: { post: PostWithTags }) {
   if (post.tags.length === 0) {
     return null;
   }
   return (
     <div className="post-tags" aria-label={`${post.title} tags`}>
       {post.tags.map((tag) => (
-        <a key={tag.slug} href={hrefForToggledTag({ tagSlug: tag.slug, selectedTags, query })}>
+        <a key={tag.slug} href={recipeHref({ query: "", tags: [tag.slug] })}>
           {tag.name}
         </a>
       ))}
     </div>
   );
+}
+
+export async function generateMetadata({ searchParams }: RecipesPageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const page = parsePage(params?.page);
+  const query = params?.q ?? "";
+  const tags = normalizeRecipeTags(params?.tags);
+  const policy = recipeIndexPolicy({ page, query, tags });
+  return {
+    alternates: { canonical: policy.canonical },
+    robots: policy.noindex ? { index: false, follow: true } : undefined
+  };
 }
 
 function RecipeNutritionBadge({ post }: { post: PostWithTags }) {
@@ -96,17 +72,16 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
   const params = await searchParams;
   const currentPage = parsePage(params?.page);
   const query = params?.q ?? "";
-  const selectedTags = selectedTagsFromParam(params?.tags);
+  const selectedTags = normalizeRecipeTags(params?.tags);
+  const canonicalTags = selectedTags.join(",");
+  if (params?.tags !== undefined && (Array.isArray(params.tags) || params.tags !== canonicalTags)) {
+    redirect(recipeHref({ page: currentPage, query, tags: selectedTags }) as Route);
+  }
   let result = { posts: [] as PostWithTags[], page: currentPage, pageSize: 10, pageCount: 1, total: 0, sort: "desc" as PostSort };
   let tags: RecipeTag[] = [];
   let setupError = false;
   try {
-    const postsPromise = query.trim()
-      ? searchRecipePostsByTagsPage(query, selectedTags, { page: currentPage, pageSize: 10 })
-      : selectedTags.length > 0
-        ? listRecipePostsByTagsPage(selectedTags, { page: currentPage, pageSize: 10 })
-      : listRecipePostsPage({ page: currentPage, pageSize: 10 });
-    [result, tags] = await Promise.all([postsPromise, listRecipeTags()]);
+    [result, tags] = await listRecipePageDataCached(query, selectedTags, { page: currentPage, pageSize: 10 });
   } catch {
     setupError = true;
   }
@@ -116,7 +91,7 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
       <h1 className="page-title">食谱</h1>
       <p className="page-subtitle">按菜系、食材和做法整理的厨房笔记。</p>
       <form className="search-form" action="/recipes">
-        {selectedTags.length > 0 ? <input type="hidden" name="tags" value={tagsParam(selectedTags)} /> : null}
+        {selectedTags.length > 0 ? <input type="hidden" name="tags" value={canonicalTags} /> : null}
         <input name="q" defaultValue={query} placeholder="只搜索食谱标题和正文" aria-label="食谱搜索关键词" />
         <button type="submit">搜索食谱</button>
       </form>
@@ -124,24 +99,27 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
         <div className="empty-state">食谱数据库结构尚未应用。请先在 Supabase 执行 v5 schema。</div>
       ) : null}
       {tags.length > 0 ? (
-        <nav className="tag-cloud" aria-label="食谱 Tags">
-          {tags.map((tag) => (
-            <a
-              aria-pressed={selectedTags.includes(tag.slug)}
-              className={selectedTags.includes(tag.slug) ? "tag-active" : ""}
-              key={tag.slug}
-              href={hrefForToggledTag({ tagSlug: tag.slug, selectedTags, query })}
-            >
-              {tag.name}
-              <span>{tag.post_count}</span>
-            </a>
-          ))}
-          {selectedTags.length > 0 ? (
-            <a className="clear-tags" href={hrefFor({ query, tags: [] })}>
-              全部取消
-            </a>
-          ) : null}
-        </nav>
+        <form className="tag-filter-form" action="/recipes">
+          {query.trim() ? <input type="hidden" name="q" value={query.trim()} /> : null}
+          <fieldset className="tag-cloud" aria-label="食谱 Tags">
+            <legend>按 Tags 筛选</legend>
+            {tags.map((tag) => (
+              <label className={selectedTags.includes(tag.slug) ? "tag-active" : ""} key={tag.slug}>
+                <input name="tags" type="checkbox" value={tag.slug} defaultChecked={selectedTags.includes(tag.slug)} />
+                <span>{tag.name}</span>
+                <span>{tag.post_count}</span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="tag-filter-actions">
+            <button type="submit">应用筛选</button>
+            {selectedTags.length > 0 ? (
+              <a className="clear-tags" href={recipeHref({ query, tags: [] })}>
+                全部取消
+              </a>
+            ) : null}
+          </div>
+        </form>
       ) : null}
       {result.posts.length === 0 ? (
         <div className="empty-state">
@@ -156,7 +134,7 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
               </h2>
               <p className="post-meta">{formatDate(post.published_at ?? post.created_at)}</p>
               <RecipeNutritionBadge post={post} />
-              <RecipePostTags post={post} selectedTags={selectedTags} query={query} />
+              <RecipePostTags post={post} />
               {post.excerpt ? <p className="post-excerpt">{post.excerpt}</p> : null}
             </article>
           ))}
@@ -164,12 +142,12 @@ export default async function RecipesPage({ searchParams }: RecipesPageProps) {
       )}
       {!setupError ? (
         <nav className="pagination" aria-label="分页">
-          {result.page > 1 ? <a href={hrefFor({ page: result.page - 1, query, tags: selectedTags })}>上一页</a> : <span>上一页</span>}
+          {result.page > 1 ? <a href={recipeHref({ page: result.page - 1, query, tags: selectedTags })}>上一页</a> : <span>上一页</span>}
           <span>
             第 {result.page} / {result.pageCount} 页
           </span>
           {result.page < result.pageCount ? (
-            <a href={hrefFor({ page: result.page + 1, query, tags: selectedTags })}>下一页</a>
+            <a href={recipeHref({ page: result.page + 1, query, tags: selectedTags })}>下一页</a>
           ) : (
             <span>下一页</span>
           )}

@@ -46,6 +46,55 @@ describe("admin auth", () => {
     });
   });
 
+  it("forbids known crawlers without redirecting them to the dynamic login page", async () => {
+    const decision = await getSiteAccessDecision({
+      method: "GET",
+      url: "https://lemonhall.me/recipes?tags=beef,stew",
+      userAgent: "Mozilla/5.0 compatible; OAI-SearchBot/1.0",
+      sessionToken: undefined,
+      env: { authCookieSecret: "cookie-secret", adminPassword: "admin-password" }
+    });
+
+    expect(decision).toEqual({ action: "forbidden" });
+  });
+
+  it("forbids crawlers from opening the dynamic admin login directly", async () => {
+    await expect(
+      getSiteAccessDecision({
+        method: "GET",
+        url: "https://lemonhall.me/admin",
+        userAgent: "ChatGPT-User/1.0",
+        sessionToken: undefined,
+        env: { authCookieSecret: "cookie-secret", adminPassword: "admin-password" }
+      })
+    ).resolves.toEqual({ action: "forbidden" });
+  });
+
+  it("does not mistake dotted dynamic post slugs for public static assets", async () => {
+    const env = { authCookieSecret: "cookie-secret", adminPassword: "admin-password" };
+    await expect(
+      getSiteAccessDecision({
+        method: "GET",
+        url: "https://lemonhall.me/posts/private-note.txt",
+        userAgent: "Mozilla/5.0",
+        sessionToken: undefined,
+        env
+      })
+    ).resolves.toEqual({
+      action: "redirect",
+      location: "https://lemonhall.me/admin?next=%2Fposts%2Fprivate-note.txt"
+    });
+    await expect(
+      getSiteAccessDecision({
+        method: "GET",
+        url: "https://lemonhall.me/posts/private-note.txt",
+        userAgent: "OAI-SearchBot/1.0",
+        sessionToken: undefined,
+        env
+      })
+    ).resolves.toEqual({ action: "forbidden" });
+  });
+
   it("allows login and static assets while rejecting unauthenticated protected APIs", async () => {
     const env = { authCookieSecret: "cookie-secret", adminPassword: "admin-password" };
 
@@ -57,6 +106,9 @@ describe("admin auth", () => {
     ).resolves.toEqual({ action: "allow" });
     await expect(
       getSiteAccessDecision({ method: "GET", url: "https://lemonhall.me/icon.svg", sessionToken: undefined, env })
+    ).resolves.toEqual({ action: "allow" });
+    await expect(
+      getSiteAccessDecision({ method: "GET", url: "https://lemonhall.me/robots.txt", sessionToken: undefined, env })
     ).resolves.toEqual({ action: "allow" });
     await expect(
       getSiteAccessDecision({ method: "POST", url: "https://lemonhall.me/api/uploads/image", sessionToken: undefined, env })
@@ -198,6 +250,50 @@ describe("admin post actions", () => {
       name: "rpc",
       args: ["save_post_tags", { post_slug: "tomato-beef", tag_names: ["牛肉", "炖菜", "法国菜"] }]
     });
+  });
+
+  it("reports a persisted post before a later tag write fails", async () => {
+    let postPersisted = false;
+    const builder = {
+      update() {
+        return builder;
+      },
+      insert() {
+        return Promise.resolve({ data: null, error: null });
+      },
+      eq() {
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+    const client = {
+      from() {
+        return builder;
+      },
+      rpc() {
+        return Promise.resolve({ data: null, error: { message: "tag write failed" } });
+      }
+    };
+
+    await expect(
+      saveAdminPost(
+        {
+          id: "post-1",
+          title: "Recipe",
+          slug: "recipe",
+          contentHtml: "<p>body</p>",
+          status: "published",
+          contentKind: "recipe",
+          tagNames: ["beef"]
+        },
+        client,
+        {
+          onPostPersisted: () => {
+            postPersisted = true;
+          }
+        }
+      )
+    ).rejects.toThrow("tag write failed");
+    expect(postPersisted).toBe(true);
   });
 
   it("does not estimate calories for ordinary posts or unrequested recipe saves", async () => {

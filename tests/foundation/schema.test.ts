@@ -46,4 +46,35 @@ describe("Supabase schema", () => {
     expect(schema).toContain("create or replace function public.save_recipe_nutrition_estimate");
     expect(schema).toContain("create or replace function public.list_recipe_nutrition_estimate");
   });
+
+  it("versions public content transactionally for race-safe cache keys", () => {
+    expect(schema).toContain("create table if not exists public.public_content_versions");
+    expect(schema).toContain("create or replace function public.get_public_content_version()");
+    expect(schema).toContain("create or replace function public.bump_public_content_version()");
+    expect(schema).toContain("create trigger posts_bump_public_content_version");
+    expect(schema).toContain("create trigger tags_bump_public_content_version");
+    expect(schema).toContain("create trigger post_tags_bump_public_content_version");
+    expect(schema).toContain("create trigger recipe_nutrition_bump_public_content_version");
+  });
+
+  it("defines one bounded recipe page RPC with a list-only return projection", () => {
+    const start = schema.indexOf("create or replace function public.list_recipe_posts_page");
+    const end = schema.indexOf("create or replace function", start + 1);
+    const recipePageFunction = schema.slice(start, end < 0 ? undefined : end);
+    const returnProjection = recipePageFunction.slice(
+      recipePageFunction.indexOf("returns table"),
+      recipePageFunction.indexOf("language sql")
+    );
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(recipePageFunction).toContain("matching_count as");
+    expect(recipePageFunction).toContain("bounded_paging as");
+    expect(recipePageFunction).toContain("((matching_count.total_count - 1) / normalized_paging.page_limit)");
+    expect(recipePageFunction).not.toContain("count(*) over()");
+    expect(recipePageFunction).toContain("greatest(1, least(coalesce(page_limit, 10), 50))");
+    expect(recipePageFunction).toContain("not exists");
+    expect(returnProjection).not.toContain("content_html");
+    expect(returnProjection).not.toContain("ingredient_estimates_json");
+    expect(returnProjection).not.toContain("raw_estimate_json");
+  });
 });

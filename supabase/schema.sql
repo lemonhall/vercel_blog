@@ -81,6 +81,59 @@ create table if not exists public.recipe_nutrition_estimates (
   unique(post_id)
 );
 
+create table if not exists public.public_content_versions (
+  singleton boolean primary key default true check (singleton),
+  version bigint not null default 1 check (version > 0)
+);
+
+insert into public.public_content_versions(singleton, version)
+values (true, 1)
+on conflict (singleton) do nothing;
+
+create or replace function public.get_public_content_version()
+returns bigint
+language sql
+stable
+as $$
+  select version
+  from public.public_content_versions
+  where singleton = true;
+$$;
+
+create or replace function public.bump_public_content_version()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.public_content_versions
+  set version = version + 1
+  where singleton = true;
+  return null;
+end;
+$$;
+
+drop trigger if exists posts_bump_public_content_version on public.posts;
+create trigger posts_bump_public_content_version
+after insert or update or delete on public.posts
+for each statement execute function public.bump_public_content_version();
+
+drop trigger if exists tags_bump_public_content_version on public.tags;
+create trigger tags_bump_public_content_version
+after insert or update or delete on public.tags
+for each statement execute function public.bump_public_content_version();
+
+drop trigger if exists post_tags_bump_public_content_version on public.post_tags;
+create trigger post_tags_bump_public_content_version
+after insert or update or delete on public.post_tags
+for each statement execute function public.bump_public_content_version();
+
+drop trigger if exists recipe_nutrition_bump_public_content_version on public.recipe_nutrition_estimates;
+create trigger recipe_nutrition_bump_public_content_version
+after insert or update or delete on public.recipe_nutrition_estimates
+for each statement execute function public.bump_public_content_version();
+
 create index if not exists posts_status_published_at_idx
   on public.posts(status, published_at desc);
 
@@ -330,6 +383,128 @@ as $$
     and posts.content_kind = 'recipe'
   group by tags.id, tags.name, tags.slug, tags.sort_order
   order by post_count desc, tags.sort_order asc, tags.name asc;
+$$;
+
+create or replace function public.list_recipe_posts_page(
+  query_text text default '',
+  tag_slugs text[] default array[]::text[],
+  page_offset integer default 0,
+  page_limit integer default 10,
+  sort_ascending boolean default false
+)
+returns table(
+  id uuid,
+  legacy_id integer,
+  title text,
+  slug text,
+  excerpt text,
+  status text,
+  content_kind text,
+  created_at timestamptz,
+  updated_at timestamptz,
+  published_at timestamptz,
+  tags jsonb,
+  servings integer,
+  calories_total_kcal integer,
+  calories_per_serving_kcal integer,
+  total_count bigint
+)
+language sql
+stable
+as $$
+  with selected_tags as (
+    select distinct trim(value) as slug
+    from unnest(coalesce(tag_slugs, array[]::text[])) as value
+    where length(trim(value)) > 0
+  ),
+  normalized_paging as (
+    select greatest(1, least(coalesce(page_limit, 10), 50))::bigint as page_limit
+  ),
+  matching_posts as (
+    select posts.*
+    from public.posts
+    where posts.status = 'published'
+      and posts.content_kind = 'recipe'
+      and (
+        length(trim(coalesce(query_text, ''))) = 0
+        or posts.title ilike '%' || trim(query_text) || '%'
+        or posts.content_html ilike '%' || trim(query_text) || '%'
+      )
+      and not exists (
+        select 1
+        from selected_tags
+        where not exists (
+          select 1
+          from public.post_tags
+          join public.tags on tags.id = post_tags.tag_id
+          where post_tags.post_id = posts.id
+            and tags.slug = selected_tags.slug
+        )
+      )
+  ),
+  matching_count as (
+    select count(*)::bigint as total_count
+    from matching_posts
+  ),
+  bounded_paging as (
+    select
+      normalized_paging.page_limit,
+      matching_count.total_count,
+      case
+        when matching_count.total_count = 0 then 0::bigint
+        else least(
+          greatest(coalesce(page_offset, 0), 0)::bigint,
+          ((matching_count.total_count - 1) / normalized_paging.page_limit) * normalized_paging.page_limit
+        )
+      end as page_offset
+    from matching_count
+    cross join normalized_paging
+  ),
+  paged_posts as (
+    select matching_posts.*, bounded_paging.total_count
+    from matching_posts
+    cross join bounded_paging
+    order by
+      case when coalesce(sort_ascending, false) then coalesce(published_at, created_at) end asc,
+      case when not coalesce(sort_ascending, false) then coalesce(published_at, created_at) end desc,
+      id asc
+    offset (select page_offset from bounded_paging)
+    limit (select page_limit from bounded_paging)
+  )
+  select
+    paged_posts.id,
+    paged_posts.legacy_id,
+    paged_posts.title,
+    paged_posts.slug,
+    paged_posts.excerpt,
+    paged_posts.status,
+    paged_posts.content_kind,
+    paged_posts.created_at,
+    paged_posts.updated_at,
+    paged_posts.published_at,
+    tag_data.tags,
+    nutrition.servings,
+    nutrition.calories_total_kcal,
+    nutrition.calories_per_serving_kcal,
+    paged_posts.total_count
+  from paged_posts
+  left join lateral (
+    select coalesce(
+      jsonb_agg(
+        jsonb_build_object('id', tags.id, 'name', tags.name, 'slug', tags.slug)
+        order by tags.sort_order asc, tags.name asc
+      ),
+      '[]'::jsonb
+    ) as tags
+    from public.post_tags
+    join public.tags on tags.id = post_tags.tag_id
+    where post_tags.post_id = paged_posts.id
+  ) as tag_data on true
+  left join public.recipe_nutrition_estimates as nutrition on nutrition.post_id = paged_posts.id
+  order by
+    case when coalesce(sort_ascending, false) then coalesce(paged_posts.published_at, paged_posts.created_at) end asc,
+    case when not coalesce(sort_ascending, false) then coalesce(paged_posts.published_at, paged_posts.created_at) end desc,
+    paged_posts.id asc;
 $$;
 
 create or replace function public.list_recipe_posts_by_tag(tag_slug text)

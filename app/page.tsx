@@ -1,4 +1,5 @@
-import { listPublishedPostsPage, type PostSort } from "@/lib/posts";
+import { type PostSort } from "@/lib/posts";
+import { listPublishedPostsPageCached } from "@/lib/public-posts";
 import { PostAdminActions } from "@/components/PostAdminActions";
 import { isAdminSessionValid } from "@/lib/admin-session";
 
@@ -48,7 +49,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const sort = normalizeSort(params?.sort);
   const wide = params?.wide === "1";
   const currentPage = parsePage(params?.page);
-  const result = await listPublishedPostsPage({ page: currentPage, pageSize: 10, sort });
+  const result = await listPublishedPostsPageCached({ page: currentPage, pageSize: 10, sort });
   const isAdmin = await isAdminSessionValid();
   const posts = result.posts;
   const returnTo = hrefFor({ page: result.page, sort: result.sort, wide });
