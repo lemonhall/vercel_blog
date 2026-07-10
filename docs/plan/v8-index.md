@@ -20,7 +20,7 @@
 | M2 抓取与 URL 边界 | robots、crawler 403、tag 参数和表单、metadata | crawler `/recipes`=403；普通未登录=303；robots 全站 Disallow；页面不输出递归追加 tag 链接；多 tag noindex | `npm test -- tests/admin/auth.test.ts tests/public/posts.test.ts`；Playwright crawler/recipes 用例 | done |
 | M3 有界数据协议 | 分页 RPC、有限投影、去除 N+1、首页投影 | 食谱内容 RPC<=2；SQL 内分页/AND/总数；列表协议不含正文和原始 nutrition JSON | `npm test -- tests/foundation/schema.test.ts tests/public/posts.test.ts` | done |
 | M4 缓存与失效 | 版本化公开缓存、后台保存/删除失效 | 热缓存食谱页 Supabase 调用<=1，冷缓存<=3；旧 in-flight 读取不能污染新版本键；成功失效 `posts`/`recipes`/path | `npm test -- tests/admin/auth.test.ts tests/admin/posts-route.test.ts tests/public/cache.test.ts` | done |
-| M5 E2E、Review 与发布 | 全量回归、独立审查、schema/application/smoke | 全量命令 exit 0；Review 无 BLOCKER；MAJOR 全部处置；schema 先于应用；live 边界符合预期 | `npm test`；`npx tsc --noEmit`；`npm run build`；`npm run e2e`；production smoke | doing |
+| M5 E2E、Review 与发布 | 全量回归、独立审查、schema/application/smoke | 全量命令 exit 0；Review 无 BLOCKER；MAJOR 全部处置；schema 先于应用；live 边界符合预期 | `npm test`；`npx tsc --noEmit`；`npm run build`；`npm run e2e`；production smoke | blocked |
 
 ## 计划索引
 
@@ -64,7 +64,7 @@
 ## 差异列表
 
 - M2-M4 的实现差异已经闭合：页面不再递归生成组合 tag URL，食谱列表使用单个有界分页 RPC，首页使用有限投影，公开缓存使用事务内容版本键。
-- 生产 Supabase 配额已恢复，完整 schema 已成功应用；剩余差异只有合并部署和生产 HTTP/登录后 smoke。
+- 完整 schema 已通过管理 API 成功应用，应用也已部署；但 Supabase 数据 REST API 仍返回 `402 exceed_egress_quota`，登录后食谱数据 smoke 被外部配额阻塞。
 
 ## Review Loop
 
@@ -107,7 +107,7 @@ Round 1 的五个 MAJOR 签名在 Round 2 全部判定 resolved。
 - actual_review_runs: 2 次独立 Review；每个修复 slice push 前均执行相关测试和 `git diff --check`
 - skipped_triggers: 0
 - skip_reasons: 无
-- mitigation: 使用 fresh-context reviewer；最终全量命令由 maker 重新执行，不采信摘要；部署后再执行完成审计
+- mitigation: 使用 fresh-context reviewer；最终全量命令由 maker 重新执行，不采信摘要；保持私有门禁，配额恢复后补登录后 smoke 和完成审计
 
 ## 验证证据
 
@@ -118,3 +118,6 @@ Round 1 的五个 MAJOR 签名在 Round 2 全部判定 resolved。
 - `supabase db query --linked --file supabase/schema.sql`：exit 0。
 - 真实数据库 smoke：`trigger_count=4`、`version=1`；`page_offset=2147483640` 返回末页记录且 `total_count=288`。
 - Review Round 2：pass，0 BLOCKER / 0 MAJOR。
+- `main` 合并提交 `b7fc73d` 已推送；Vercel production deployment `dpl_6pFvJwi2HsSobTY1Z9NZPm1b8KcM` 状态 Ready。
+- `https://blog.lemonhall.me` 未登录 smoke：crawler `/recipes`=403、crawler `/admin`=403、普通 `/recipes`=303、dotted slug=303、`robots.txt`=200 且 `Disallow: /`。
+- 登录后 `/recipes`=200，但渲染数据库 setup-error；直接调用 `get_public_content_version` 和 `list_recipe_posts_page` 均返回 `402 exceed_egress_quota`。因此 M5 尚未完成。
