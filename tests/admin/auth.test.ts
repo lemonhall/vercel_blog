@@ -252,6 +252,50 @@ describe("admin post actions", () => {
     });
   });
 
+  it("reports a persisted post before a later tag write fails", async () => {
+    let postPersisted = false;
+    const builder = {
+      update() {
+        return builder;
+      },
+      insert() {
+        return Promise.resolve({ data: null, error: null });
+      },
+      eq() {
+        return Promise.resolve({ data: null, error: null });
+      }
+    };
+    const client = {
+      from() {
+        return builder;
+      },
+      rpc() {
+        return Promise.resolve({ data: null, error: { message: "tag write failed" } });
+      }
+    };
+
+    await expect(
+      saveAdminPost(
+        {
+          id: "post-1",
+          title: "Recipe",
+          slug: "recipe",
+          contentHtml: "<p>body</p>",
+          status: "published",
+          contentKind: "recipe",
+          tagNames: ["beef"]
+        },
+        client,
+        {
+          onPostPersisted: () => {
+            postPersisted = true;
+          }
+        }
+      )
+    ).rejects.toThrow("tag write failed");
+    expect(postPersisted).toBe(true);
+  });
+
   it("does not estimate calories for ordinary posts or unrequested recipe saves", async () => {
     const client = {
       from() {

@@ -47,9 +47,13 @@ export async function POST(request: Request) {
       const env = getServerEnv();
       await saveAdminPost(
         { id: id || undefined, title, slug, contentHtml, status, contentKind, tagNames },
-        supabase as unknown as AdminPostClient
+        supabase as unknown as AdminPostClient,
+        {
+          onPostPersisted: () => {
+            postSaved = true;
+          }
+        }
       );
-      postSaved = true;
       await maybeEstimateAndSaveRecipeNutrition(
         { id: id || undefined, title, slug, contentHtml, status, contentKind, tagNames, estimateCalories },
         supabase as unknown as AdminPostClient,
