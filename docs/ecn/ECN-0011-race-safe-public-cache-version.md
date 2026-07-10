@@ -40,4 +40,5 @@
 - [x] PRD 已同步更新并标注 ECN-0011
 - [x] v8 计划与追溯矩阵已同步更新
 - [x] schema、标量版本读取和并发回填测试已补充
-- [ ] 生产 schema、全量回归、Review Round 2 和 live smoke 已闭合
+- [x] 生产 schema、全量回归和 Review Round 2 已闭合
+- [ ] 应用生产部署和 live smoke 已闭合
